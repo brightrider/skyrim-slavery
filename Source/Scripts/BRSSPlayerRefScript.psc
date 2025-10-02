@@ -9,4 +9,5 @@ Event OnPlayerLoadGame()
 EndEvent
 
 Function Init()
+    SendModEvent("BRSSGameLoaded")
 EndFunction
