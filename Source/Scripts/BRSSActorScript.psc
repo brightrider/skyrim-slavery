@@ -18,7 +18,7 @@ ObjectReference[] LinkedRefs
 Bool Lock = False
 
 Event OnInit()
-    LinkedRefs = new ObjectReference[3]
+    LinkedRefs = new ObjectReference[2]
 
     RegisterForModEvent("BRSSGameLoaded", "OnGameLoaded")
 
@@ -26,21 +26,66 @@ Event OnInit()
 EndEvent
 
 Event OnGameLoaded(String eventName, String strArg, Float numArg, Form sender)
-    PO3_SKSEFunctions.SetLinkedRef(Self, LinkedRefs[0], None)
-    PO3_SKSEFunctions.SetLinkedRef(Self, LinkedRefs[1], BRSS_PackageKeyword1)
-    PO3_SKSEFunctions.SetLinkedRef(Self, LinkedRefs[2], BRSS_PackageKeyword2)
+    AcquireLock()
+
+    PO3_SKSEFunctions.SetLinkedRef(Self, LinkedRefs[0], BRSS_PackageKeyword1)
+    PO3_SKSEFunctions.SetLinkedRef(Self, LinkedRefs[1], BRSS_PackageKeyword2)
+
+    ReleaseLock()
 EndEvent
+
+Function Wait(Bool bypassLock=False)
+    AcquireLock(bypassLock)
+
+    SetLinkedRef(BRSS_PackageKeyword1, None)
+    SetLinkedRef(BRSS_PackageKeyword2, None)
+    SetAV("Variable08", 0)
+    EvaluatePackage()
+
+    ReleaseLock(bypassLock)
+EndFunction
+
+Function Travel(ObjectReference target, Bool bypassLock=False)
+    AcquireLock(bypassLock)
+
+    SetLinkedRef(BRSS_PackageKeyword1, target)
+    SetLinkedRef(BRSS_PackageKeyword2, None)
+    SetAV("Variable08", 1)
+    EvaluatePackage()
+
+    ReleaseLock(bypassLock)
+EndFunction
+
+Function Follow(ObjectReference target, Bool bypassLock=False)
+    AcquireLock(bypassLock)
+
+    SetLinkedRef(BRSS_PackageKeyword1, target)
+    SetLinkedRef(BRSS_PackageKeyword2, None)
+    SetAV("Variable08", 2)
+    EvaluatePackage()
+
+    ReleaseLock(bypassLock)
+EndFunction
+
+Function UseIdleMarker(ObjectReference target, Bool bypassLock=False)
+    AcquireLock(bypassLock)
+
+    SetLinkedRef(BRSS_PackageKeyword1, target)
+    SetLinkedRef(BRSS_PackageKeyword2, None)
+    SetAV("Variable08", 3)
+    EvaluatePackage()
+
+    ReleaseLock(bypassLock)
+EndFunction
 
 ; ##############################################################################
 ; # Private Functions
 ; ##############################################################################
 Function SetLinkedRef(Keyword kwd, ObjectReference target)
-    If kwd == None
+    If kwd == BRSS_PackageKeyword1
         LinkedRefs[0] = target
-    ElseIf kwd == BRSS_PackageKeyword1
-        LinkedRefs[1] = target
     ElseIf kwd == BRSS_PackageKeyword2
-        LinkedRefs[2] = target
+        LinkedRefs[1] = target
     EndIf
     PO3_SKSEFunctions.SetLinkedRef(Self, target, kwd)
 EndFunction
