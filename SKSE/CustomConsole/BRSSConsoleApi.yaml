@@ -1,0 +1,8 @@
+version: 1
+name: brss
+script: BRSSConsoleApi
+help: BRSS Console API
+subs:
+  - name: test
+    func: Test
+    help: Checks if BRSS is up and running
