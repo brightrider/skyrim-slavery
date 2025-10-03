@@ -6,3 +6,14 @@ subs:
   - name: test
     func: Test
     help: Checks if BRSS is up and running
+  - name: actor-add
+    func: ActorAdd
+    help: Spawns a new actor
+    args:
+      - name: actorType
+        type: String
+        help: Actor type (guard, slave)
+      - name: name
+        type: String
+        required: false
+        help: Actor name
