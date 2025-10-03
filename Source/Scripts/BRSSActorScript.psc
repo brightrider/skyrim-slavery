@@ -15,6 +15,8 @@ Keyword Property BRSS_PackageKeyword2 Auto
 
 ObjectReference[] LinkedRefs
 
+Bool Lock = False
+
 Event OnInit()
     LinkedRefs = new ObjectReference[3]
 
@@ -41,5 +43,24 @@ Function SetLinkedRef(Keyword kwd, ObjectReference target)
         LinkedRefs[2] = target
     EndIf
     PO3_SKSEFunctions.SetLinkedRef(Self, target, kwd)
+EndFunction
+
+Function AcquireLock(Bool bypass=False, Float spinDelay=0.001)
+    If bypass
+        Return
+    EndIf
+
+    While Lock
+        Utility.Wait(spinDelay)
+    EndWhile
+    Lock = True
+EndFunction
+
+Function ReleaseLock(Bool bypass=False)
+    If bypass
+        Return
+    EndIf
+
+    Lock = False
 EndFunction
 ; ##############################################################################
