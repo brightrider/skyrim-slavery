@@ -23,6 +23,8 @@ Event OnInit()
     RegisterForModEvent("BRSSGameLoaded", "OnGameLoaded")
 
     IgnoreFriendlyHits()
+
+    BRSSLogger.LogInfo("BRSSActor", Self, "Initialized")
 EndEvent
 
 Event OnGameLoaded(String eventName, String strArg, Float numArg, Form sender)
@@ -30,6 +32,8 @@ Event OnGameLoaded(String eventName, String strArg, Float numArg, Form sender)
 
     PO3_SKSEFunctions.SetLinkedRef(Self, LinkedRefs[0], BRSS_PackageKeyword1)
     PO3_SKSEFunctions.SetLinkedRef(Self, LinkedRefs[1], BRSS_PackageKeyword2)
+
+    BRSSLogger.LogInfo("BRSSActor", Self, "Initialized (Game Loaded)")
 
     ReleaseLock()
 EndEvent
@@ -42,6 +46,8 @@ Function Wait(Bool bypassLock=False)
     SetAV("Variable08", 0)
     EvaluatePackage()
 
+    BRSSLogger.LogInfo("BRSSActor", Self, "Executing WAIT procedure")
+
     ReleaseLock(bypassLock)
 EndFunction
 
@@ -52,6 +58,8 @@ Function Travel(ObjectReference target, Bool bypassLock=False)
     SetLinkedRef(BRSS_PackageKeyword2, None)
     SetAV("Variable08", 1)
     EvaluatePackage()
+
+    BRSSLogger.LogInfo("BRSSActor", Self, "Executing TRAVEL procedure with target: " + target.GetDisplayName())
 
     ReleaseLock(bypassLock)
 EndFunction
@@ -64,6 +72,8 @@ Function Follow(ObjectReference target, Bool bypassLock=False)
     SetAV("Variable08", 2)
     EvaluatePackage()
 
+    BRSSLogger.LogInfo("BRSSActor", Self, "Executing FOLLOW procedure with target: " + target.GetDisplayName())
+
     ReleaseLock(bypassLock)
 EndFunction
 
@@ -74,6 +84,8 @@ Function UseIdleMarker(ObjectReference target, Bool bypassLock=False)
     SetLinkedRef(BRSS_PackageKeyword2, None)
     SetAV("Variable08", 3)
     EvaluatePackage()
+
+    BRSSLogger.LogInfo("BRSSActor", Self, "Executing USE_IDLE_MARKER procedure with target: " + target.GetDisplayName())
 
     ReleaseLock(bypassLock)
 EndFunction
