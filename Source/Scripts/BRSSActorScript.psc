@@ -13,11 +13,13 @@ Package Property BRSS_Guard_UseMagic Auto
 Keyword Property BRSS_PackageKeyword1 Auto
 Keyword Property BRSS_PackageKeyword2 Auto
 
+String Name
 ObjectReference[] LinkedRefs
 
 Bool Lock = False
 
 Event OnInit()
+    Name = GetDisplayName()
     LinkedRefs = new ObjectReference[2]
 
     RegisterForModEvent("BRSSGameLoaded", "OnGameLoaded")
@@ -32,6 +34,8 @@ Event OnGameLoaded(String eventName, String strArg, Float numArg, Form sender)
 
     PO3_SKSEFunctions.SetLinkedRef(Self, LinkedRefs[0], BRSS_PackageKeyword1)
     PO3_SKSEFunctions.SetLinkedRef(Self, LinkedRefs[1], BRSS_PackageKeyword2)
+
+    SetDisplayName(Name)
 
     BRSSLogger.LogInfo("BRSSActor", Self, "Initialized (Game Loaded)")
 
@@ -88,6 +92,11 @@ Function UseIdleMarker(ObjectReference target, Bool bypassLock=False)
     BRSSLogger.LogInfo("BRSSActor", Self, "Executing USE_IDLE_MARKER procedure with target: " + target.GetDisplayName())
 
     ReleaseLock(bypassLock)
+EndFunction
+
+Function SetActorName(String value)
+    Name = value
+    SetDisplayName(value)
 EndFunction
 
 String Function GetDescription()

@@ -5,14 +5,14 @@ ActorBase Property BRSS_Slave Auto
 
 Function AddActor(String actorType, String name="")
     If actorType == "Guard"
-        Actor newActor = Game.GetPlayer().PlaceAtMe(BRSS_Guard) as Actor
+        BRSSActorScript newActor = Game.GetPlayer().PlaceAtMe(BRSS_Guard) as BRSSActorScript
         If name != ""
-            newActor.SetDisplayName(name)
+            newActor.SetActorName(name)
         EndIf
     ElseIf actorType == "Slave"
-        Actor newActor = Game.GetPlayer().PlaceAtMe(BRSS_Slave) as Actor
+        BRSSActorScript newActor = Game.GetPlayer().PlaceAtMe(BRSS_Slave) as BRSSActorScript
         If name != ""
-            newActor.SetDisplayName(name)
+            newActor.SetActorName(name)
         EndIf
     EndIf
 EndFunction
