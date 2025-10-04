@@ -90,6 +90,10 @@ Function UseIdleMarker(ObjectReference target, Bool bypassLock=False)
     ReleaseLock(bypassLock)
 EndFunction
 
+String Function GetDescription()
+    Return GetDisplayName() + "[" + GetFormID() + "]"
+EndFunction
+
 ; ##############################################################################
 ; # Private Functions
 ; ##############################################################################

@@ -16,4 +16,17 @@ subs:
       - name: name
         type: String
         required: false
-        help: Actor name
+        help: Actor name (optional)
+  - name: actor-list
+    func: ActorList
+    help: Lists actors
+    args:
+      - name: filter
+        type: String
+        required: false
+        help: Text filter
+      - name: radius
+        type: Float
+        default: 10240
+        required: false
+        help: Radius to search within (default=10240, 0 for all)
