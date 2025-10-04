@@ -63,7 +63,7 @@ Function Travel(ObjectReference target, Bool bypassLock=False)
     SetAV("Variable08", 1)
     EvaluatePackage()
 
-    BRSSLogger.LogInfo("BRSSActor", Self, "Executing TRAVEL procedure with target: " + target.GetDisplayName())
+    BRSSLogger.LogInfo("BRSSActor", Self, "Executing TRAVEL procedure with target: " + BRSSLogger.GetLogID(target))
 
     ReleaseLock(bypassLock)
 EndFunction
@@ -76,7 +76,7 @@ Function Follow(ObjectReference target, Bool bypassLock=False)
     SetAV("Variable08", 2)
     EvaluatePackage()
 
-    BRSSLogger.LogInfo("BRSSActor", Self, "Executing FOLLOW procedure with target: " + target.GetDisplayName())
+    BRSSLogger.LogInfo("BRSSActor", Self, "Executing FOLLOW procedure with target: " + BRSSLogger.GetLogID(target))
 
     ReleaseLock(bypassLock)
 EndFunction
@@ -89,7 +89,7 @@ Function UseIdleMarker(ObjectReference target, Bool bypassLock=False)
     SetAV("Variable08", 3)
     EvaluatePackage()
 
-    BRSSLogger.LogInfo("BRSSActor", Self, "Executing USE_IDLE_MARKER procedure with target: " + target.GetDisplayName())
+    BRSSLogger.LogInfo("BRSSActor", Self, "Executing USE_IDLE_MARKER procedure with target: " + BRSSLogger.GetLogID(target))
 
     ReleaseLock(bypassLock)
 EndFunction
