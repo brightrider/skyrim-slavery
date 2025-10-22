@@ -5,10 +5,10 @@ help: BRSS Console API
 subs:
   - name: test
     func: Test
-    help: Checks if BRSS is up and running
+    help: Check if BRSS is up and running
   - name: actor-add
     func: ActorAdd
-    help: Spawns a new actor
+    help: Spawn a new actor
     args:
       - name: actorType
         type: String
@@ -19,7 +19,7 @@ subs:
         help: Actor name (optional)
   - name: actor-list
     func: ActorList
-    help: Lists actors
+    help: List actors
     args:
       - name: filter
         type: String
@@ -38,3 +38,10 @@ subs:
         type: Actor
         help: Actor ID
         selected: true
+  - name: actor-follow
+    func: ActorFollow
+    help: Create a follow relationship between the actors
+    args:
+      - name: actorList
+        type: String
+        help: Actor list (id1:id2:id3:...)

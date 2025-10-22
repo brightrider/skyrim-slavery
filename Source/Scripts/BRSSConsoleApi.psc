@@ -47,3 +47,23 @@ String Function ActorWait(Actor actorId) global
     (actorId as BRSSActorScript).Wait()
     Return ""
 EndFunction
+
+String Function ActorFollow(String actorList) global
+    String[] tokens = StringUtil.Split(actorList, ":")
+
+    ObjectReference[] members = new ObjectReference[128]
+    Int i = 0
+    While i < tokens.Length
+        If tokens[i] == "player"
+            members[i] = Game.GetPlayer()
+        Else
+            members[i] = Game.GetFormEx(PO3_SKSEFunctions.StringToInt("0x" + tokens[i])) as ObjectReference
+        EndIf
+        i += 1
+    EndWhile
+
+    BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
+    controller.CreateConvoy(members)
+
+    Return ""
+EndFunction
