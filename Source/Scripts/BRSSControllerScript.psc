@@ -16,3 +16,11 @@ Function AddActor(String actorType, String name="")
         EndIf
     EndIf
 EndFunction
+
+Function CreateConvoy(BRSSActorScript[] members)
+    Int i = 1
+    While i < members.Length
+        members[i].Follow(members[i - 1])
+        i += 1
+    EndWhile
+EndFunction
