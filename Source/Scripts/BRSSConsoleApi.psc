@@ -42,3 +42,8 @@ String Function ActorList(String filter, Float radius) global
 
     Return result
 EndFunction
+
+String Function ActorWait(Actor actorId) global
+    (actorId as BRSSActorScript).Wait()
+    Return ""
+EndFunction

@@ -30,3 +30,11 @@ subs:
         default: 10240
         required: false
         help: Radius to search within (default=10240, 0 for all)
+  - name: actor-wait
+    func: ActorWait
+    help: Set actor action to idle
+    args:
+      - name: actorId
+        type: Actor
+        help: Actor ID
+        selected: true
