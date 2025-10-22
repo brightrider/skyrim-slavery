@@ -13,5 +13,10 @@ Function LogError(String moduleName, ObjectReference ref, String msg) global
 EndFunction
 
 String Function GetLogID(ObjectReference ref) global
-    Return BRSSUtil.GetFormID(ref) + ":" + ref.GetDisplayName()
+    String name = ref.GetDisplayName()
+    If name == ""
+        name = PO3_SKSEFunctions.GetFormEditorID(ref)
+    EndIf
+
+    Return BRSSUtil.GetFormID(ref) + ":" + name
 EndFunction

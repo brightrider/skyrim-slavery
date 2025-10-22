@@ -100,7 +100,29 @@ Function SetActorName(String value)
 EndFunction
 
 String Function GetDescription()
-    Return GetDisplayName() + "[" + GetFormID() + "]"
+    String type = "Guard"
+    If IsInFaction(BRSS_Slaves)
+        type = "Slave"
+    EndIf
+
+    String aliveStatus = "Alive"
+    If IsDead()
+        aliveStatus = "Dead"
+    EndIf
+
+    String procedure = "No action assigned"
+    Int procedureCode = GetAV("Variable08") as Int
+    If procedureCode == 0
+        procedure = "Idle"
+    ElseIf procedureCode == 1
+        procedure = "Traveling to " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1))
+    ElseIf procedureCode == 2
+        procedure = "Following " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1))
+    ElseIf procedureCode == 3
+        procedure = "Using Idle Marker " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1))
+    EndIf
+
+    Return GetDisplayName() + "[" + BRSSUtil.GetFormID(Self) + ", " + type + ", " + aliveStatus + "] " + procedure
 EndFunction
 
 ; ##############################################################################
