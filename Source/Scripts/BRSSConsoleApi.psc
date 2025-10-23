@@ -67,3 +67,30 @@ String Function ActorFollow(String actorList) global
 
     Return ""
 EndFunction
+
+String Function MarkerAdd(String name) global
+    BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
+    controller.Add(name)
+    Return ""
+EndFunction
+
+String Function MarkerList() global
+    String result = ""
+
+    BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
+
+    String[] names = controller.GetNames()
+    Int i = 0
+    While i < names.Length
+        result += names[i] + "\n"
+        i += 1
+    EndWhile
+
+    Return result
+EndFunction
+
+String Function MarkerDel(String name) global
+    BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
+    controller.Remove(name)
+    Return ""
+EndFunction

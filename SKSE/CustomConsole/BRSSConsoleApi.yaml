@@ -45,3 +45,20 @@ subs:
       - name: actorList
         type: String
         help: Actor list (id1:id2:id3:...)
+  - name: marker-add
+    func: MarkerAdd
+    help: Add a marker at your current location and orientation
+    args:
+      - name: name
+        type: String
+        help: Marker name
+  - name: marker-list
+    func: MarkerList
+    help: List all markers
+  - name: marker-del
+    func: MarkerDel
+    help: Delete a marker
+    args:
+      - name: name
+        type: String
+        help: Marker name
