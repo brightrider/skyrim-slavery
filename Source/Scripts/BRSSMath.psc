@@ -18,6 +18,6 @@ Function RotateZ(ObjectReference obj, Float angle) global
     ElseIf newAngle < 0.0
         newAngle += 360.0
     EndIf
-    obj.SetAngle(obj.X, obj.Y, newAngle)
+    obj.SetAngle(obj.GetAngleX(), obj.GetAngleY(), newAngle)
 EndFunction
 ; ##############################################################################

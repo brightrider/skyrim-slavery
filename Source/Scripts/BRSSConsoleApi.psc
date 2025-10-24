@@ -94,3 +94,24 @@ String Function MarkerDel(String name) global
     controller.Remove(name)
     Return ""
 EndFunction
+
+String Function MarkerGridAdd(String name, Int width, String grid) global
+    String[] tokens = StringUtil.Split(grid, ",")
+    Int[] gridData = Utility.CreateIntArray(tokens.Length)
+    Int i = 0
+    While i < tokens.Length
+        gridData[i] = PO3_SKSEFunctions.StringToInt(tokens[i])
+        i += 1
+    EndWhile
+
+    BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
+    controller.CreateGrid(name, gridData, width)
+
+    Return ""
+EndFunction
+
+String Function MarkerGridDel(String name) global
+    BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
+    controller.DestroyGrid(name)
+    Return ""
+EndFunction
