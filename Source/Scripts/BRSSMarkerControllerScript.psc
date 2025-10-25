@@ -9,6 +9,8 @@ ObjectReference Function Add(String name)
 
     ObjectReference marker = Game.GetPlayer().PlaceAtMe(EmptyIdleMarker)
 
+    marker.SetAngle(0.0, 0.0, marker.GetAngleZ())
+
     StorageUtil.StringListAdd(None, "BRSS_MarkerNames", name, allowDuplicate=False)
     StorageUtil.FormListAdd(None, "BRSS_Markers", marker, allowDuplicate=False)
 
@@ -61,7 +63,6 @@ Function CreateGrid(String name, Int[] grid, Int width, Int offX=192, Int offY=5
 
         Int newX = offX * (i % width)
         Int newY = offY * (i / width)
-        marker.SetAngle(0.0, 0.0, marker.GetAngleZ())
         BRSSMath.TranslateLocalXY(marker, newX, newY)
         BRSSMath.RotateZ(marker, grid[i])
 

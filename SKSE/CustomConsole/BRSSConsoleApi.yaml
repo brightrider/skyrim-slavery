@@ -45,6 +45,17 @@ subs:
       - name: actorList
         type: String
         help: Actor list (id1:id2:id3:...)
+  - name: actor-use-marker
+    func: ActorUseMarker
+    help: Make an actor use the specified marker
+    args:
+      - name: actorId
+        type: Actor
+        help: Actor ID
+        selected: true
+      - name: markerName
+        type: String
+        help: Marker name
   - name: marker-add
     func: MarkerAdd
     help: Add a marker at your current location and orientation
