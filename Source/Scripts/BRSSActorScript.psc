@@ -26,6 +26,10 @@ Event OnInit()
 
     IgnoreFriendlyHits()
 
+    If IsSlave()
+        ForceAV("Health", 1.0)
+    EndIf
+
     BRSSLogger.LogInfo("BRSSActor", Self, "Initialized")
 EndEvent
 
@@ -42,6 +46,14 @@ Event OnGameLoaded(String eventName, String strArg, Float numArg, Form sender)
     ReleaseLock()
 EndEvent
 
+Bool Function IsGuard()
+    Return IsInFaction(BRSS_Guards)
+EndFunction
+
+Bool Function IsSlave()
+    Return IsInFaction(BRSS_Slaves)
+EndFunction
+
 Function Wait(Bool bypassLock=False)
     AcquireLock(bypassLock)
 
@@ -49,8 +61,6 @@ Function Wait(Bool bypassLock=False)
     SetLinkedRef(BRSS_PackageKeyword2, None)
     SetAV("Variable08", 0)
     EvaluatePackage()
-
-    BRSSLogger.LogInfo("BRSSActor", Self, "Executing WAIT procedure")
 
     ReleaseLock(bypassLock)
 EndFunction
@@ -63,8 +73,6 @@ Function Travel(ObjectReference target, Bool bypassLock=False)
     SetAV("Variable08", 1)
     EvaluatePackage()
 
-    BRSSLogger.LogInfo("BRSSActor", Self, "Executing TRAVEL procedure with target: " + BRSSLogger.GetLogID(target))
-
     ReleaseLock(bypassLock)
 EndFunction
 
@@ -76,22 +84,66 @@ Function Follow(ObjectReference target, Bool bypassLock=False)
     SetAV("Variable08", 2)
     EvaluatePackage()
 
-    BRSSLogger.LogInfo("BRSSActor", Self, "Executing FOLLOW procedure with target: " + BRSSLogger.GetLogID(target))
+    ReleaseLock(bypassLock)
+EndFunction
+
+Function UseIdleMarker(ObjectReference target, ObjectReference secondTarget=None, Bool bypassLock=False)
+    AcquireLock(bypassLock)
+
+    SetLinkedRef(BRSS_PackageKeyword1, target)
+    SetLinkedRef(BRSS_PackageKeyword2, secondTarget)
+    SetAV("Variable08", 3)
+    EvaluatePackage()
 
     ReleaseLock(bypassLock)
 EndFunction
 
-Function UseIdleMarker(ObjectReference target, Bool bypassLock=False)
+Function UseWeapon(ObjectReference loc, ObjectReference target, Bool bypassLock=False)
     AcquireLock(bypassLock)
 
-    SetLinkedRef(BRSS_PackageKeyword1, target)
-    SetLinkedRef(BRSS_PackageKeyword2, None)
-    SetAV("Variable08", 3)
+    SetLinkedRef(BRSS_PackageKeyword1, loc)
+    SetLinkedRef(BRSS_PackageKeyword2, target)
+    SetAV("Variable08", 4)
     EvaluatePackage()
 
-    BRSSLogger.LogInfo("BRSSActor", Self, "Executing USE_IDLE_MARKER procedure with target: " + BRSSLogger.GetLogID(target))
-
     ReleaseLock(bypassLock)
+EndFunction
+
+Function ToggleUseWeapon()
+    AcquireLock()
+
+    ObjectReference slot1 = GetLinkedRef(BRSS_PackageKeyword1)
+    ObjectReference slot2 = GetLinkedRef(BRSS_PackageKeyword2)
+
+    If IsGuard()
+        If IsUsingIdleMarker() && slot2
+            UseWeapon(slot1, slot2, bypassLock=True)
+        ElseIf IsUsingWeapon()
+            UseIdleMarker(slot1, slot2, bypassLock=True)
+        EndIf
+    EndIf
+
+    ReleaseLock()
+EndFunction
+
+Bool Function IsWaiting()
+    Return GetAV("Variable08") as Int == 0
+EndFunction
+
+Bool Function IsTraveling()
+    Return GetAV("Variable08") as Int == 1
+EndFunction
+
+Bool Function IsFollowing()
+    Return GetAV("Variable08") as Int == 2
+EndFunction
+
+Bool Function IsUsingIdleMarker()
+    Return GetAV("Variable08") as Int == 3
+EndFunction
+
+Bool Function IsUsingWeapon()
+    Return GetAV("Variable08") as Int == 4
 EndFunction
 
 Function SetActorName(String value)
@@ -112,6 +164,7 @@ String Function GetDescription()
 
     String procedure = "No action assigned"
     Int procedureCode = GetAV("Variable08") as Int
+    ; TODO: Improve this
     If procedureCode == 0
         procedure = "Idle"
     ElseIf procedureCode == 1
@@ -119,7 +172,9 @@ String Function GetDescription()
     ElseIf procedureCode == 2
         procedure = "Following " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1))
     ElseIf procedureCode == 3
-        procedure = "Using Idle Marker " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1))
+        procedure = "Using Idle Marker " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1)) + " with target " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword2))
+    ElseIf procedureCode == 4
+        procedure = "Using weapon on " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword2))
     EndIf
 
     Return GetDisplayName() + "[" + BRSSUtil.GetFormID(Self) + ", " + type + ", " + aliveStatus + "] " + procedure

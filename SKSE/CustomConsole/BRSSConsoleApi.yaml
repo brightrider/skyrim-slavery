@@ -56,6 +56,10 @@ subs:
       - name: markerName
         type: String
         help: Marker name
+      - name: target
+        type: ObjectReference
+        help: Target object reference (optional)
+        required: false
   - name: marker-add
     func: MarkerAdd
     help: Add a marker at your current location and orientation
