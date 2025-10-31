@@ -38,6 +38,17 @@ subs:
         type: Actor
         help: Actor ID
         selected: true
+  - name: actor-travel
+    func: ActorTravel
+    help: Make an actor travel to the specified location
+    args:
+      - name: actorId
+        type: Actor
+        help: Actor ID
+        selected: true
+      - name: markerName
+        type: String
+        help: Marker name
   - name: actor-follow
     func: ActorFollow
     help: Create a follow relationship between the actors

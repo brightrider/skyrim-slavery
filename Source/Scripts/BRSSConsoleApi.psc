@@ -48,6 +48,12 @@ String Function ActorWait(Actor actorId) global
     Return ""
 EndFunction
 
+String Function ActorTravel(Actor actorId, String markerName) global
+    BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
+    (actorId as BRSSActorScript).Travel(controller.Get(markerName))
+    Return ""
+EndFunction
+
 String Function ActorFollow(String actorList) global
     String[] tokens = StringUtil.Split(actorList, ":")
 
