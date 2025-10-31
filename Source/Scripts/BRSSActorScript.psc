@@ -126,6 +126,17 @@ Function ToggleUseWeapon()
     ReleaseLock()
 EndFunction
 
+Function Patrol(ObjectReference p1, ObjectReference p2, Bool bypassLock=False)
+    AcquireLock(bypassLock)
+
+    SetLinkedRef(BRSS_PackageKeyword1, p1)
+    SetLinkedRef(BRSS_PackageKeyword2, p2)
+    SetAV("Variable08", 6)
+    EvaluatePackage()
+
+    ReleaseLock(bypassLock)
+EndFunction
+
 Bool Function IsWaiting()
     Return GetAV("Variable08") as Int == 0
 EndFunction
@@ -144,6 +155,10 @@ EndFunction
 
 Bool Function IsUsingWeapon()
     Return GetAV("Variable08") as Int == 4
+EndFunction
+
+Bool Function IsPatrolling()
+    Return GetAV("Variable08") as Int == 6
 EndFunction
 
 Function SetActorName(String value)
@@ -175,6 +190,8 @@ String Function GetDescription()
         procedure = "Using Idle Marker " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1)) + " with target " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword2))
     ElseIf procedureCode == 4
         procedure = "Using weapon on " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword2))
+    ElseIf procedureCode == 6
+        procedure = "Patrolling between " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1)) + " and " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword2))
     EndIf
 
     Return GetDisplayName() + "[" + BRSSUtil.GetFormID(Self) + ", " + type + ", " + aliveStatus + "] " + procedure

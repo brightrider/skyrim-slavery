@@ -71,6 +71,20 @@ subs:
         type: ObjectReference
         help: Target object reference (optional)
         required: false
+  - name: actor-patrol
+    func: ActorPatrol
+    help: Make an actor patrol between the specified markers
+    args:
+      - name: actorId
+        type: Actor
+        help: Actor ID
+        selected: true
+      - name: point1
+        type: String
+        help: Marker name
+      - name: point2
+        type: String
+        help: Marker name
   - name: marker-add
     func: MarkerAdd
     help: Add a marker at your current location and orientation

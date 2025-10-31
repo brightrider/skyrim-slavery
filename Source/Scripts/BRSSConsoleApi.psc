@@ -80,6 +80,12 @@ String Function ActorUseMarker(Actor actorId, String markerName, ObjectReference
     Return ""
 EndFunction
 
+String Function ActorPatrol(Actor actorId, String point1, String point2) global
+    BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
+    (actorId as BRSSActorScript).Patrol(controller.Get(point1), controller.Get(point2))
+    Return ""
+EndFunction
+
 String Function MarkerAdd(String name) global
     BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
     controller.Add(name)
