@@ -30,6 +30,17 @@ subs:
         default: 10240
         required: false
         help: Radius to search within (default=10240, 0 for all)
+  - name: actor-rename
+    func: ActorRename
+    help: Rename an actor
+    args:
+      - name: actorId
+        type: Actor
+        help: Actor ID
+        selected: true
+      - name: name
+        type: String
+        help: New actor name
   - name: actor-wait
     func: ActorWait
     help: Set actor action to idle
@@ -55,9 +66,9 @@ subs:
     args:
       - name: actorList
         type: String
-        help: Actor list (id1:id2:id3:...)
-  - name: actor-use-marker
-    func: ActorUseMarker
+        help: Actor list (name1,name2,name3,...)
+  - name: actor-use
+    func: ActorUse
     help: Make an actor use the specified marker
     args:
       - name: actorId
@@ -67,9 +78,9 @@ subs:
       - name: markerName
         type: String
         help: Marker name
-      - name: target
-        type: ObjectReference
-        help: Target object reference (optional)
+      - name: targetName
+        type: String
+        help: Target actor name (optional)
         required: false
   - name: actor-patrol
     func: ActorPatrol
@@ -85,6 +96,28 @@ subs:
       - name: point2
         type: String
         help: Marker name
+  - name: actor-aim
+    func: ActorAim
+    help: Make an actor aim at the specified actor
+    args:
+      - name: actorId
+        type: Actor
+        help: Actor ID
+        selected: true
+      - name: name
+        type: String
+        help: Actor name
+  - name: actor-use-weapon
+    func: ActorUseWeapon
+    help: Make an actor use a weapon on the specified actor
+    args:
+      - name: actorId
+        type: Actor
+        help: Actor ID
+        selected: true
+      - name: name
+        type: String
+        help: Actor name
   - name: marker-add
     func: MarkerAdd
     help: Add a marker at your current location and orientation
@@ -92,9 +125,33 @@ subs:
       - name: name
         type: String
         help: Marker name
+      - name: markerForm
+        type: Form
+        help: Marker form (default=EmptyIdleMarker)
+        required: false
   - name: marker-list
     func: MarkerList
     help: List all markers
+    args:
+      - name: filter
+        type: String
+        help: Text filter
+        required: false
+      - name: radius
+        type: Float
+        help: Radius to search within (default=10240, 0 for all)
+        default: 10240
+        required: false
+  - name: marker-rename
+    func: MarkerRename
+    help: Rename a marker
+    args:
+      - name: oldName
+        type: String
+        help: Old marker name
+      - name: newName
+        type: String
+        help: New marker name
   - name: marker-del
     func: MarkerDel
     help: Delete a marker
@@ -109,12 +166,26 @@ subs:
       - name: name
         type: String
         help: Base marker name
-      - name: width
-        type: Int
-        help: Number of markers in a row
       - name: grid
         type: String
         help: Rotation of markers relative to your current orientation (0,0,0,90,90,90,...)
+      - name: width
+        type: Int
+        help: Number of markers in a row
+      - name: markerForm
+        type: Form
+        help: Marker form (default=EmptyIdleMarker)
+        required: false
+      - name: offsetX
+        type: Int
+        help: X offset between markers (default=128)
+        default: 128
+        required: false
+      - name: offsetY
+        type: Int
+        help: Y offset between markers (default=256)
+        default: 256
+        required: false
   - name: marker-grid-del
     func: MarkerGridDel
     help: Delete a grid of markers

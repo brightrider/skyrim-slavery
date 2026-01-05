@@ -98,10 +98,12 @@ Function UseIdleMarker(ObjectReference target, ObjectReference secondTarget=None
     ReleaseLock(bypassLock)
 EndFunction
 
-Function UseWeapon(ObjectReference loc, ObjectReference target, Bool bypassLock=False)
+Function UseWeapon(ObjectReference target, ObjectReference loc, Bool bypassLock=False)
     AcquireLock(bypassLock)
 
-    SetLinkedRef(BRSS_PackageKeyword1, loc)
+    If loc
+        SetLinkedRef(BRSS_PackageKeyword1, loc)
+    EndIf
     SetLinkedRef(BRSS_PackageKeyword2, target)
     SetAV("Variable08", 4)
     EvaluatePackage()
@@ -117,7 +119,9 @@ Function ToggleUseWeapon()
 
     If IsGuard()
         If IsUsingIdleMarker() && slot2
-            UseWeapon(slot1, slot2, bypassLock=True)
+            Aim(slot2, slot1, bypassLock=True)
+        ElseIf IsAiming()
+            UseWeapon(slot2, slot1, bypassLock=True)
         ElseIf IsUsingWeapon()
             UseIdleMarker(slot1, slot2, bypassLock=True)
         EndIf
@@ -133,6 +137,42 @@ Function Patrol(ObjectReference p1, ObjectReference p2, Bool bypassLock=False)
     SetLinkedRef(BRSS_PackageKeyword2, p2)
     SetAV("Variable08", 6)
     EvaluatePackage()
+
+    ReleaseLock(bypassLock)
+EndFunction
+
+Function Aim(ObjectReference target, ObjectReference loc, Bool bypassLock=False)
+    AcquireLock(bypassLock)
+
+    If loc
+        SetLinkedRef(BRSS_PackageKeyword1, loc)
+    EndIf
+    SetLinkedRef(BRSS_PackageKeyword2, target)
+    SetAV("Variable08", 7)
+    EvaluatePackage()
+
+    ReleaseLock(bypassLock)
+EndFunction
+
+Function Sit(ObjectReference target, Bool bypassLock=False)
+    AcquireLock(bypassLock)
+
+    SetLinkedRef(BRSS_PackageKeyword1, target)
+    SetLinkedRef(BRSS_PackageKeyword2, None)
+    SetAV("Variable08", 8)
+    EvaluatePackage()
+
+    ReleaseLock(bypassLock)
+EndFunction
+
+Function Use(ObjectReference target, ObjectReference secondTarget=None, Bool bypassLock=False)
+    AcquireLock(bypassLock)
+
+    If target.GetBaseObject() as Furniture
+        Sit(target, bypassLock=True)
+    Else
+        UseIdleMarker(target, secondTarget, bypassLock=True)
+    EndIf
 
     ReleaseLock(bypassLock)
 EndFunction
@@ -161,7 +201,19 @@ Bool Function IsPatrolling()
     Return GetAV("Variable08") as Int == 6
 EndFunction
 
+Bool Function IsAiming()
+    Return GetAV("Variable08") as Int == 7
+EndFunction
+
+Bool Function IsSitting()
+    Return GetAV("Variable08") as Int == 8
+EndFunction
+
 Function SetActorName(String value)
+    If ! value
+        Return
+    EndIf
+
     Name = value
     SetDisplayName(value)
 EndFunction
@@ -175,6 +227,11 @@ String Function GetDescription()
     String aliveStatus = "Alive"
     If IsDead()
         aliveStatus = "Dead"
+    EndIf
+
+    Float distance = GetDistance(Game.GetPlayer())
+    If distance > 1000000.0 || distance < 0.0
+        distance = -1.0
     EndIf
 
     String procedure = "No action assigned"
@@ -192,9 +249,21 @@ String Function GetDescription()
         procedure = "Using weapon on " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword2))
     ElseIf procedureCode == 6
         procedure = "Patrolling between " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1)) + " and " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword2))
+    ElseIf procedureCode == 7
+        procedure = "Aiming at " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword2))
+    ElseIf procedureCode == 8
+        procedure = "Sitting at " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1))
     EndIf
 
-    Return GetDisplayName() + "[" + BRSSUtil.GetFormID(Self) + ", " + type + ", " + aliveStatus + "] " + procedure
+    Return                                                                             \
+        GetDisplayName()                                                              +\
+        "["                                                                           +\
+        BRSSUtil.GetFormID(Self)                                               + ", " +\
+        type                                                                   + ", " +\
+        aliveStatus                                                            + ", " +\
+        GetCurrentLocation().GetName() + "(" + distance + ")"                         +\
+        "] "                                                                          +\
+        procedure
 EndFunction
 
 ; ##############################################################################

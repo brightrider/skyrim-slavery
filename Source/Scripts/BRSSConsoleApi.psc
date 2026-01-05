@@ -43,6 +43,11 @@ String Function ActorList(String filter, Float radius) global
     Return result
 EndFunction
 
+String Function ActorRename(Actor actorId, String name) global
+    (actorId as BRSSActorScript).SetActorName(name)
+    Return ""
+EndFunction
+
 String Function ActorWait(Actor actorId) global
     (actorId as BRSSActorScript).Wait()
     Return ""
@@ -55,28 +60,14 @@ String Function ActorTravel(Actor actorId, String markerName) global
 EndFunction
 
 String Function ActorFollow(String actorList) global
-    String[] tokens = StringUtil.Split(actorList, ":")
-
-    ObjectReference[] members = new ObjectReference[128]
-    Int i = 0
-    While i < tokens.Length
-        If tokens[i] == "player"
-            members[i] = Game.GetPlayer()
-        Else
-            members[i] = Game.GetFormEx(PO3_SKSEFunctions.StringToInt("0x" + tokens[i])) as ObjectReference
-        EndIf
-        i += 1
-    EndWhile
-
     BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
-    controller.CreateConvoy(members)
-
+    controller.CreateConvoy(BRSSUtil.DisplayNamesToRefArray(actorList))
     Return ""
 EndFunction
 
-String Function ActorUseMarker(Actor actorId, String markerName, ObjectReference target) global
+String Function ActorUse(Actor actorId, String markerName, String targetName) global
     BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
-    (actorId as BRSSActorScript).UseIdleMarker(controller.Get(markerName), target)
+    (actorId as BRSSActorScript).Use(controller.Get(markerName), BRSSUtil.GetActorByDisplayName(targetName))
     Return ""
 EndFunction
 
@@ -86,25 +77,33 @@ String Function ActorPatrol(Actor actorId, String point1, String point2) global
     Return ""
 EndFunction
 
-String Function MarkerAdd(String name) global
+String Function ActorAim(Actor actorId, String name) global
     BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
-    controller.Add(name)
+    (actorId as BRSSActorScript).Aim(BRSSUtil.GetActorByDisplayName(name), None)
     Return ""
 EndFunction
 
-String Function MarkerList() global
-    String result = ""
-
+String Function ActorUseWeapon(Actor actorId, String name) global
     BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
+    (actorId as BRSSActorScript).UseWeapon(BRSSUtil.GetActorByDisplayName(name), None)
+    Return ""
+EndFunction
 
-    String[] names = controller.GetNames()
-    Int i = 0
-    While i < names.Length
-        result += names[i] + "\n"
-        i += 1
-    EndWhile
+String Function MarkerAdd(String name, Form markerForm) global
+    BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
+    controller.Add(name, markerForm)
+    Return ""
+EndFunction
 
-    Return result
+String Function MarkerList(String filter, Float radius) global
+    BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
+    Return controller.GetList(filter, radius)
+EndFunction
+
+String Function MarkerRename(String oldName, String newName) global
+    BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
+    controller.Rename(oldName, newName)
+    Return ""
 EndFunction
 
 String Function MarkerDel(String name) global
@@ -113,7 +112,7 @@ String Function MarkerDel(String name) global
     Return ""
 EndFunction
 
-String Function MarkerGridAdd(String name, Int width, String grid) global
+String Function MarkerGridAdd(String name, String grid, Int width, Form markerForm, Int offX, Int offY) global
     String[] tokens = StringUtil.Split(grid, ",")
     Int[] gridData = Utility.CreateIntArray(tokens.Length)
     Int i = 0
@@ -123,7 +122,7 @@ String Function MarkerGridAdd(String name, Int width, String grid) global
     EndWhile
 
     BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
-    controller.CreateGrid(name, gridData, width)
+    controller.CreateGrid(name, gridData, width, markerForm, offX, offY)
 
     Return ""
 EndFunction

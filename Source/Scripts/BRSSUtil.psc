@@ -1,9 +1,39 @@
 Scriptname BRSSUtil
 
+Actor[] Function GetAllActors() global
+    Return PO3_SKSEFunctions.GetAllActorsInFaction(Game.GetFormFromFile(0x00005900, "SkyrimSlavery.esp") as Faction)
+EndFunction
+
+Actor Function GetActorByDisplayName(String name) global
+    Actor[] actors = GetAllActors()
+    Int i = 0
+    While i < actors.Length
+        If actors[i].GetDisplayName() == name
+            Return actors[i]
+        EndIf
+        i += 1
+    EndWhile
+EndFunction
+
+Actor Function GetPlayerOrActorByDisplayName(String name) global
+    If name == "player"
+        Return Game.GetPlayer()
+    EndIf
+    Return GetActorByDisplayName(name)
+EndFunction
+
 String Function GetFormID(ObjectReference ref) global
     Return StringUtil.Substring(PO3_SKSEFunctions.IntToString(ref.GetFormID(), abHex=True), 2)
 EndFunction
 
-ObjectReference Function GetRuntimeRef(Int id) global
-    Return Game.GetFormEx(Math.LogicalOr(id, 0xFF000000)) as ObjectReference
+Form[] Function DisplayNamesToRefArray(String arg, String sep=",") global
+    String[] parts = StringUtil.Split(arg, sep)
+    Form[] result = Utility.CreateFormArray(parts.Length)
+    Int i = 0
+    While i < parts.Length
+        result[i] = GetPlayerOrActorByDisplayName(parts[i])
+        i += 1
+    EndWhile
+
+    Return result
 EndFunction

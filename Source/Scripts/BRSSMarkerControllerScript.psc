@@ -4,10 +4,19 @@ Form Property EmptyIdleMarker Auto
 
 Bool Lock = False
 
-ObjectReference Function Add(String name)
+ObjectReference Function Add(String name, Form markerForm=None)
     AcquireLock()
 
-    ObjectReference marker = Game.GetPlayer().PlaceAtMe(EmptyIdleMarker)
+    If ! name || Get(name, bypassLock=True)
+        ReleaseLock()
+        Return None
+    EndIf
+
+    If ! markerForm
+        markerForm = EmptyIdleMarker
+    EndIf
+
+    ObjectReference marker = Game.GetPlayer().PlaceAtMe(markerForm, abForcePersist=True)
 
     marker.SetAngle(0.0, 0.0, marker.GetAngleZ())
 
@@ -18,14 +27,29 @@ ObjectReference Function Add(String name)
     Return marker
 EndFunction
 
-ObjectReference Function Get(String name)
-    AcquireLock()
+ObjectReference Function Get(String name, Bool bypassLock=False)
+    AcquireLock(bypassLock)
 
     Int idx = StorageUtil.StringListFind(None, "BRSS_MarkerNames", name)
     ObjectReference marker = StorageUtil.FormListGet(None, "BRSS_Markers", idx) as ObjectReference
 
-    ReleaseLock()
+    ReleaseLock(bypassLock)
     Return marker
+EndFunction
+
+Function Rename(String oldName, String newName)
+    If ! newName
+        Return
+    EndIf
+
+    AcquireLock()
+
+    Int idx = StorageUtil.StringListFind(None, "BRSS_MarkerNames", oldName)
+    If idx >= 0
+        StorageUtil.StringListSet(None, "BRSS_MarkerNames", idx, newName)
+    EndIf
+
+    ReleaseLock()
 EndFunction
 
 Bool Function Remove(String name)
@@ -47,19 +71,33 @@ Bool Function Remove(String name)
     Return True
 EndFunction
 
-String[] Function GetNames()
+String Function GetList(String filter="", Float radius=0.0)
+    String result
+
     AcquireLock()
 
-    String[] names = StorageUtil.StringListToArray(None, "BRSS_MarkerNames")
+    Int i
+    While i < StorageUtil.StringListCount(None, "BRSS_MarkerNames")
+        String name = StorageUtil.StringListGet(None, "BRSS_MarkerNames", i)
+        ObjectReference marker = StorageUtil.FormListGet(None, "BRSS_Markers", i) as ObjectReference
+
+        If radius <= 0.0 || marker.GetDistance(Game.GetPlayer()) <= radius
+            If !filter || StringUtil.Find(name, filter) != -1
+                result += name + " " + "(" + marker.GetCurrentLocation().GetName() + ")" + "\n"
+            EndIf
+        EndIf
+
+        i += 1
+    EndWhile
 
     ReleaseLock()
-    Return names
+    Return result
 EndFunction
 
-Function CreateGrid(String name, Int[] grid, Int width, Int offX=192, Int offY=512)
+Function CreateGrid(String name, Int[] grid, Int width, Form markerForm=None, Int offX=128, Int offY=256)
     Int i = 0
     While i < grid.Length
-        ObjectReference marker = Add(name + i)
+        ObjectReference marker = Add(name + i, markerForm)
 
         Int newX = offX * (i % width)
         Int newY = offY * (i / width)
