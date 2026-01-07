@@ -90,8 +90,12 @@ EndFunction
 Function UseIdleMarker(ObjectReference target, ObjectReference secondTarget=None, Bool bypassLock=False)
     AcquireLock(bypassLock)
 
-    SetLinkedRef(BRSS_PackageKeyword1, target)
-    SetLinkedRef(BRSS_PackageKeyword2, secondTarget)
+    If target
+        SetLinkedRef(BRSS_PackageKeyword1, target)
+    EndIf
+    If secondTarget
+        SetLinkedRef(BRSS_PackageKeyword2, secondTarget)
+    EndIf
     SetAV("Variable08", 3)
     EvaluatePackage()
 
@@ -104,7 +108,9 @@ Function UseWeapon(ObjectReference target, ObjectReference loc, Bool bypassLock=
     If loc
         SetLinkedRef(BRSS_PackageKeyword1, loc)
     EndIf
-    SetLinkedRef(BRSS_PackageKeyword2, target)
+    If target
+        SetLinkedRef(BRSS_PackageKeyword2, target)
+    EndIf
     SetAV("Variable08", 4)
     EvaluatePackage()
 
@@ -147,7 +153,9 @@ Function Aim(ObjectReference target, ObjectReference loc, Bool bypassLock=False)
     If loc
         SetLinkedRef(BRSS_PackageKeyword1, loc)
     EndIf
-    SetLinkedRef(BRSS_PackageKeyword2, target)
+    If target
+        SetLinkedRef(BRSS_PackageKeyword2, target)
+    EndIf
     SetAV("Variable08", 7)
     EvaluatePackage()
 
@@ -160,6 +168,21 @@ Function Sit(ObjectReference target, Bool bypassLock=False)
     SetLinkedRef(BRSS_PackageKeyword1, target)
     SetLinkedRef(BRSS_PackageKeyword2, None)
     SetAV("Variable08", 8)
+    EvaluatePackage()
+
+    ReleaseLock(bypassLock)
+EndFunction
+
+Function UseWeaponOnce(ObjectReference target, ObjectReference loc, Bool bypassLock=False)
+    AcquireLock(bypassLock)
+
+    If loc
+        SetLinkedRef(BRSS_PackageKeyword1, loc)
+    EndIf
+    If target
+        SetLinkedRef(BRSS_PackageKeyword2, target)
+    EndIf
+    SetAV("Variable08", 9)
     EvaluatePackage()
 
     ReleaseLock(bypassLock)
@@ -209,6 +232,10 @@ Bool Function IsSitting()
     Return GetAV("Variable08") as Int == 8
 EndFunction
 
+Bool Function IsUsingWeaponOnce()
+    Return GetAV("Variable08") as Int == 9
+EndFunction
+
 Function SetActorName(String value)
     If ! value
         Return
@@ -245,7 +272,7 @@ String Function GetDescription()
         procedure = "Following " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1))
     ElseIf procedureCode == 3
         procedure = "Using Idle Marker " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1)) + " with target " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword2))
-    ElseIf procedureCode == 4
+    ElseIf procedureCode == 4 || procedureCode == 9
         procedure = "Using weapon on " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword2))
     ElseIf procedureCode == 6
         procedure = "Patrolling between " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1)) + " and " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword2))

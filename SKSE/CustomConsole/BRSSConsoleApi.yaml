@@ -69,16 +69,16 @@ subs:
         help: Actor list (name1,name2,name3,...)
   - name: actor-use
     func: ActorUse
-    help: Make an actor use the specified marker
+    help: Make an actor use the specified thing
     args:
       - name: actorId
         type: Actor
         help: Actor ID
         selected: true
-      - name: markerName
+      - name: targetId
         type: String
-        help: Marker name
-      - name: targetName
+        help: Marker name or target reference ID (0x...)
+      - name: targetActorName
         type: String
         help: Target actor name (optional)
         required: false
@@ -110,6 +110,17 @@ subs:
   - name: actor-use-weapon
     func: ActorUseWeapon
     help: Make an actor use a weapon on the specified actor
+    args:
+      - name: actorId
+        type: Actor
+        help: Actor ID
+        selected: true
+      - name: name
+        type: String
+        help: Actor name
+  - name: actor-use-weapon-once
+    func: ActorUseWeaponOnce
+    help: Make an actor use a weapon once on the specified actor
     args:
       - name: actorId
         type: Actor
@@ -193,3 +204,28 @@ subs:
       - name: name
         type: String
         help: Base marker name
+  - name: execution-setup
+    func: ExecutionSetup
+    help: Setup execution
+    args:
+      - name: guardList
+        type: String
+        help: Guard actor list (name1,name2,name3,...)
+      - name: slaveList
+        type: String
+        help: Slave actor list (name1,name2,name3,...)
+      - name: markerGridName
+        type: String
+        help: Marker grid base name
+  - name: execution-idle
+    func: ExecutionIdle
+    help: Set execution state to idle
+  - name: execution-aim
+    func: ExecutionAim
+    help: Set execution state to aim
+  - name: execution-fire
+    func: ExecutionFire
+    help: Set execution state to fire
+  - name: execution-fire-once
+    func: ExecutionFireOnce
+    help: Set execution state to fire once

@@ -65,9 +65,17 @@ String Function ActorFollow(String actorList) global
     Return ""
 EndFunction
 
-String Function ActorUse(Actor actorId, String markerName, String targetName) global
+String Function ActorUse(Actor actorId, String targetId, String targetActorName) global
     BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
-    (actorId as BRSSActorScript).Use(controller.Get(markerName), BRSSUtil.GetActorByDisplayName(targetName))
+
+    ObjectReference target
+    If StringUtil.GetNthChar(targetId, 0) == "0" && StringUtil.GetNthChar(targetId, 1) == "x"
+        target = Game.GetFormEx(PO3_SKSEFunctions.StringToInt(targetId)) as ObjectReference
+    Else
+        target = controller.Get(targetId)
+    EndIf
+
+    (actorId as BRSSActorScript).Use(target, BRSSUtil.GetActorByDisplayName(targetActorName))
     Return ""
 EndFunction
 
@@ -86,6 +94,12 @@ EndFunction
 String Function ActorUseWeapon(Actor actorId, String name) global
     BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
     (actorId as BRSSActorScript).UseWeapon(BRSSUtil.GetActorByDisplayName(name), None)
+    Return ""
+EndFunction
+
+String Function ActorUseWeaponOnce(Actor actorId, String name) global
+    BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
+    (actorId as BRSSActorScript).UseWeaponOnce(BRSSUtil.GetActorByDisplayName(name), None)
     Return ""
 EndFunction
 
@@ -130,5 +144,35 @@ EndFunction
 String Function MarkerGridDel(String name) global
     BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
     controller.DestroyGrid(name)
+    Return ""
+EndFunction
+
+String Function ExecutionSetup(String guardList, String slaveList, String markerGridName) global
+    BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
+    controller.ExecutionSetup(BRSSUtil.DisplayNamesToRefArray(guardList), BRSSUtil.DisplayNamesToRefArray(slaveList), markerGridName)
+    Return ""
+EndFunction
+
+String Function ExecutionIdle() global
+    BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
+    controller.ExecutionIdle()
+    Return ""
+EndFunction
+
+String Function ExecutionAim() global
+    BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
+    controller.ExecutionAim()
+    Return ""
+EndFunction
+
+String Function ExecutionFire() global
+    BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
+    controller.ExecutionFire()
+    Return ""
+EndFunction
+
+String Function ExecutionFireOnce() global
+    BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
+    controller.ExecutionFireOnce()
     Return ""
 EndFunction
