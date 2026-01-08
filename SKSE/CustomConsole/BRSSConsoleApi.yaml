@@ -204,6 +204,26 @@ subs:
       - name: name
         type: String
         help: Base marker name
+  - name: tracking-track
+    func: TrackingTrack
+    help: Start tracking an actor on the map
+    args:
+      - name: slot
+        type: Int
+        help: Tracking slot (0-9)
+      - name: name
+        type: String
+        help: Actor name
+  - name: tracking-list
+    func: TrackingList
+    help: List tracking slots
+  - name: tracking-untrack
+    func: TrackingUntrack
+    help: Stop tracking an actor on the map
+    args:
+      - name: slot
+        type: Int
+        help: Tracking slot (0-9)
   - name: execution-setup
     func: ExecutionSetup
     help: Setup execution

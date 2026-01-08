@@ -147,6 +147,32 @@ String Function MarkerGridDel(String name) global
     Return ""
 EndFunction
 
+String Function TrackingTrack(Int slot, String name) global
+    BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
+    controller.TrackOnMap(slot, BRSSUtil.GetActorByDisplayName(name))
+    Return ""
+EndFunction
+
+String Function TrackingList() global
+    BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
+
+    String result
+    Int i
+    While i < 10
+        ObjectReference ref = (controller.GetAliasById(i + 2) as ReferenceAlias).GetReference()
+        result += "Slot " + i + ": " + ref.GetDisplayName() + "\n"
+        i += 1
+    EndWhile
+
+    Return result
+EndFunction
+
+String Function TrackingUntrack(Int slot) global
+    BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
+    controller.UntrackOnMap(slot)
+    Return ""
+EndFunction
+
 String Function ExecutionSetup(String guardList, String slaveList, String markerGridName) global
     BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
     controller.ExecutionSetup(BRSSUtil.DisplayNamesToRefArray(guardList), BRSSUtil.DisplayNamesToRefArray(slaveList), markerGridName)

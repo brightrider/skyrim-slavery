@@ -25,6 +25,16 @@ Function CreateConvoy(Form[] members)
     EndWhile
 EndFunction
 
+Function TrackOnMap(Int slot, ObjectReference target)
+    (GetAliasById(slot + 2) as ReferenceAlias).ForceRefTo(target)
+    SetObjectiveDisplayed(slot, abForce=True)
+EndFunction
+
+Function UntrackOnMap(Int slot)
+    SetObjectiveDisplayed(slot, False, abForce=True)
+    (GetAliasById(slot + 2) as ReferenceAlias).Clear()
+EndFunction
+
 Function ExecutionSetup(Form[] guards, Form[] slaves, String markerGridName)
     BRSSMarkerControllerScript markerController = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
 
