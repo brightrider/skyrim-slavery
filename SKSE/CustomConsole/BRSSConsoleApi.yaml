@@ -17,6 +17,14 @@ subs:
         type: String
         required: false
         help: Actor name (optional)
+      - name: actorRace
+        type: String
+        help: Actor race (default=random, nord, breton, darkelf, highelf, imperial, redguard, woodelf)
+        required: false
+      - name: isVampire
+        type: Bool
+        help: Is vampire (default=false, not supported for redguard and woodelf)
+        required: false
   - name: actor-list
     func: ActorList
     help: List actors
@@ -137,7 +145,7 @@ subs:
         type: String
         help: Marker name
       - name: markerForm
-        type: Form
+        type: String
         help: Marker form (default=EmptyIdleMarker)
         required: false
   - name: marker-list
@@ -184,7 +192,7 @@ subs:
         type: Int
         help: Number of markers in a row
       - name: markerForm
-        type: Form
+        type: String
         help: Marker form (default=EmptyIdleMarker)
         required: false
       - name: offsetX

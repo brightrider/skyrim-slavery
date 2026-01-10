@@ -26,6 +26,18 @@ String Function GetFormID(ObjectReference ref) global
     Return StringUtil.Substring(PO3_SKSEFunctions.IntToString(ref.GetFormID(), abHex=True), 2)
 EndFunction
 
+Form Function GetForm(String id) global
+    Int numId = PO3_SKSEFunctions.StringToInt(id)
+    If ! numId
+        numId = PO3_SKSEFunctions.StringToInt("0x" + id)
+    EndIf
+
+    If numId
+        Return Game.GetFormEx(numId)
+    EndIf
+    Return PO3_SKSEFunctions.GetFormFromEditorID(id)
+EndFunction
+
 Form[] Function DisplayNamesToRefArray(String arg, String sep=",") global
     String[] parts = StringUtil.Split(arg, sep)
     Form[] result = Utility.CreateFormArray(parts.Length)

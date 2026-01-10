@@ -4,9 +4,9 @@ String Function Test() global
     Return "BRSS: OK"
 EndFunction
 
-String Function ActorAdd(String actorType, String name) global
+String Function ActorAdd(String actorType, String name, String actorRace, Bool isVampire) global
     BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
-    controller.AddActor(actorType, name)
+    controller.AddActor(actorType, name, actorRace, isVampire)
     Return ""
 EndFunction
 
@@ -103,9 +103,9 @@ String Function ActorUseWeaponOnce(Actor actorId, String name) global
     Return ""
 EndFunction
 
-String Function MarkerAdd(String name, Form markerForm) global
+String Function MarkerAdd(String name, String markerForm) global
     BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
-    controller.Add(name, markerForm)
+    controller.Add(name, BRSSUtil.GetForm(markerForm))
     Return ""
 EndFunction
 
@@ -126,7 +126,7 @@ String Function MarkerDel(String name) global
     Return ""
 EndFunction
 
-String Function MarkerGridAdd(String name, String grid, Int width, Form markerForm, Int offX, Int offY) global
+String Function MarkerGridAdd(String name, String grid, Int width, String markerForm, Int offX, Int offY) global
     String[] tokens = StringUtil.Split(grid, ",")
     Int[] gridData = Utility.CreateIntArray(tokens.Length)
     Int i = 0
@@ -136,7 +136,7 @@ String Function MarkerGridAdd(String name, String grid, Int width, Form markerFo
     EndWhile
 
     BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
-    controller.CreateGrid(name, gridData, width, markerForm, offX, offY)
+    controller.CreateGrid(name, gridData, width, BRSSUtil.GetForm(markerForm), offX, offY)
 
     Return ""
 EndFunction
