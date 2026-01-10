@@ -2,19 +2,52 @@ Scriptname BRSSControllerScript extends Quest
 
 ActorBase Property BRSS_Guard Auto
 ActorBase Property BRSS_Slave Auto
+LeveledActor Property BRSS_LC Auto
+LeveledActor Property BRSS_LC_Breton_Female Auto
+LeveledActor Property BRSS_LC_Breton_Female_Child Auto
+LeveledActor Property BRSS_LC_Breton_Female_Vampire Auto
+LeveledActor Property BRSS_LC_Breton_Female_Vampire_Child Auto
+LeveledActor Property BRSS_LC_DarkElf_Female Auto
+LeveledActor Property BRSS_LC_DarkElf_Female_Vampire Auto
+LeveledActor Property BRSS_LC_HighElf_Female Auto
+LeveledActor Property BRSS_LC_HighElf_Female_Vampire Auto
+LeveledActor Property BRSS_LC_Imperial_Female Auto
+LeveledActor Property BRSS_LC_Imperial_Female_Child Auto
+LeveledActor Property BRSS_LC_Imperial_Female_Vampire Auto
+LeveledActor Property BRSS_LC_Nord_Female Auto
+LeveledActor Property BRSS_LC_Nord_Female_Child Auto
+LeveledActor Property BRSS_LC_Nord_Female_Vampire Auto
+LeveledActor Property BRSS_LC_Redguard_Female Auto
+LeveledActor Property BRSS_LC_Redguard_Female_Child Auto
+LeveledActor Property BRSS_LC_WoodElf_Female Auto
 
-Function AddActor(String actorType, String name="")
+Bool Lock = False
+
+Function AddActor(String actorType, String name="", String actorRace="nord", Bool isVampire=False)
+    AcquireLock()
+
     If actorType == "Guard"
+        SelectNpcTemplateList(actorRace, isVampire, False)
         BRSSActorScript newActor = Game.GetPlayer().PlaceAtMe(BRSS_Guard, abForcePersist=True) as BRSSActorScript
         If name != ""
             newActor.SetActorName(name)
         EndIf
     ElseIf actorType == "Slave"
+        SelectNpcTemplateList(actorRace, isVampire, False)
         BRSSActorScript newActor = Game.GetPlayer().PlaceAtMe(BRSS_Slave, abForcePersist=True) as BRSSActorScript
         If name != ""
             newActor.SetActorName(name)
         EndIf
+    ElseIf actorType == "Child"
+        SelectNpcTemplateList(actorRace, isVampire, True)
+        BRSSActorScript newActor = Game.GetPlayer().PlaceAtMe(BRSS_Slave, abForcePersist=True) as BRSSActorScript
+        If name != ""
+            newActor.SetActorName(name)
+        EndIf
+        newActor.SetOutfit(Game.GetFormFromFile(0x03C81B, "Dragonborn.esm") as Outfit)
     EndIf
+
+    ReleaseLock()
 EndFunction
 
 Function CreateConvoy(Form[] members)
@@ -95,3 +128,66 @@ Function ExecutionFireOnce()
         i += 1
     EndWhile
 EndFunction
+
+; ##############################################################################
+; # Private Functions
+; ##############################################################################
+Function SelectNpcTemplateList(String type, Bool isVampire, Bool isChild)
+    BRSS_LC.Revert()
+
+    If type == "breton" && !isVampire && !isChild
+        BRSS_LC.AddForm(BRSS_LC_Breton_Female, 1)
+    ElseIf type == "breton" && !isVampire && isChild
+        BRSS_LC.AddForm(BRSS_LC_Breton_Female_Child, 1)
+    ElseIf type == "breton" && isVampire && !isChild
+        BRSS_LC.AddForm(BRSS_LC_Breton_Female_Vampire, 1)
+    ElseIf type == "breton" && isVampire && isChild
+        BRSS_LC.AddForm(BRSS_LC_Breton_Female_Vampire_Child, 1)
+    ElseIf type == "darkelf" && !isVampire && !isChild
+        BRSS_LC.AddForm(BRSS_LC_DarkElf_Female, 1)
+    ElseIf type == "darkelf" && isVampire && !isChild
+        BRSS_LC.AddForm(BRSS_LC_DarkElf_Female_Vampire, 1)
+    ElseIf type == "highelf" && !isVampire && !isChild
+        BRSS_LC.AddForm(BRSS_LC_HighElf_Female, 1)
+    ElseIf type == "highelf" && isVampire && !isChild
+        BRSS_LC.AddForm(BRSS_LC_HighElf_Female_Vampire, 1)
+    ElseIf type == "imperial" && !isVampire && !isChild
+        BRSS_LC.AddForm(BRSS_LC_Imperial_Female, 1)
+    ElseIf type == "imperial" && !isVampire && isChild
+        BRSS_LC.AddForm(BRSS_LC_Imperial_Female_Child, 1)
+    ElseIf type == "imperial" && isVampire && !isChild
+        BRSS_LC.AddForm(BRSS_LC_Imperial_Female_Vampire, 1)
+    ElseIf type == "nord" && !isVampire && !isChild
+        BRSS_LC.AddForm(BRSS_LC_Nord_Female, 1)
+    ElseIf type == "nord" && !isVampire && isChild
+        BRSS_LC.AddForm(BRSS_LC_Nord_Female_Child, 1)
+    ElseIf type == "nord" && isVampire && !isChild
+        BRSS_LC.AddForm(BRSS_LC_Nord_Female_Vampire, 1)
+    ElseIf type == "redguard" && !isVampire && !isChild
+        BRSS_LC.AddForm(BRSS_LC_Redguard_Female, 1)
+    ElseIf type == "redguard" && !isVampire && isChild
+        BRSS_LC.AddForm(BRSS_LC_Redguard_Female_Child, 1)
+    ElseIf type == "woodelf" && !isVampire && !isChild
+        BRSS_LC.AddForm(BRSS_LC_WoodElf_Female, 1)
+    EndIf
+EndFunction
+
+Function AcquireLock(Bool bypass=False, Float spinDelay=0.001)
+    If bypass
+        Return
+    EndIf
+
+    While Lock
+        Utility.Wait(spinDelay)
+    EndWhile
+    Lock = True
+EndFunction
+
+Function ReleaseLock(Bool bypass=False)
+    If bypass
+        Return
+    EndIf
+
+    Lock = False
+EndFunction
+; ##############################################################################

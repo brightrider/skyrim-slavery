@@ -17,6 +17,15 @@ subs:
         type: String
         required: false
         help: Actor name (optional)
+      - name: actorRace
+        type: String
+        help: Actor race (default=nord, breton, darkelf, highelf, imperial, redguard, woodelf)
+        default: nord
+        required: false
+      - name: isVampire
+        type: Bool
+        help: Is vampire (default=false, not supported for redguard and woodelf)
+        required: false
   - name: actor-list
     func: ActorList
     help: List actors

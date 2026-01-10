@@ -4,9 +4,9 @@ String Function Test() global
     Return "BRSS: OK"
 EndFunction
 
-String Function ActorAdd(String actorType, String name) global
+String Function ActorAdd(String actorType, String name, String actorRace, Bool isVampire) global
     BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
-    controller.AddActor(actorType, name)
+    controller.AddActor(actorType, name, actorRace, isVampire)
     Return ""
 EndFunction
 
