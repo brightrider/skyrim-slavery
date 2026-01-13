@@ -21,6 +21,11 @@ LeveledActor Property BRSS_LC_Redguard_Female Auto
 LeveledActor Property BRSS_LC_Redguard_Female_Child Auto
 LeveledActor Property BRSS_LC_WoodElf_Female Auto
 
+Faction Property CWPlayerAlly Auto
+
+Message Property BRSS_SelectNpcType Auto
+Message Property BRSS_SelectRace Auto
+
 Bool Lock = False
 
 BRSSActorScript Function AddActor(String actorType, String name="", String actorRace="", Bool isVampire=False)
@@ -29,47 +34,132 @@ BRSSActorScript Function AddActor(String actorType, String name="", String actor
     BRSSActorScript newActor
 
     If ! actorRace || actorRace == "random"
-        Int idx = Utility.RandomInt(0, 6)
-        If idx == 0
-            actorRace = "nord"
-        ElseIf idx == 1
+        If actorType != "Child" && isVampire
+            actorRace = GetRaceByIdx(Utility.RandomInt(0, 4))
+        ElseIf actorType == "Child" && !isVampire
+            actorRace = GetRaceByIdxChild(Utility.RandomInt(0, 3))
+        ElseIf actorType == "Child" && isVampire
             actorRace = "breton"
-        ElseIf idx == 2
-            actorRace = "darkelf"
-        ElseIf idx == 3
-            actorRace = "highelf"
-        ElseIf idx == 4
-            actorRace = "imperial"
-        ElseIf idx == 5
-            actorRace = "redguard"
-        ElseIf idx == 6
-            actorRace = "woodelf"
+        Else
+            actorRace = GetRaceByIdx(Utility.RandomInt(0, 6))
         EndIf
     EndIf
 
     If actorType == "Guard"
-        SelectNpcTemplateList(actorRace, isVampire, False)
+        If ! SelectNpcTemplateList(actorRace, isVampire, False)
+            ReleaseLock()
+            Return None
+        EndIf
         newActor = Game.GetPlayer().PlaceAtMe(BRSS_Guard, abForcePersist=True) as BRSSActorScript
         If name != ""
             newActor.SetActorName(name)
         EndIf
     ElseIf actorType == "Slave"
-        SelectNpcTemplateList(actorRace, isVampire, False)
+        If ! SelectNpcTemplateList(actorRace, isVampire, False)
+            ReleaseLock()
+            Return None
+        EndIf
         newActor = Game.GetPlayer().PlaceAtMe(BRSS_Slave, abForcePersist=True) as BRSSActorScript
         If name != ""
             newActor.SetActorName(name)
         EndIf
     ElseIf actorType == "Child"
-        SelectNpcTemplateList(actorRace, isVampire, True)
+        If ! SelectNpcTemplateList(actorRace, isVampire, True)
+            ReleaseLock()
+            Return None
+        EndIf
         newActor = Game.GetPlayer().PlaceAtMe(BRSS_Slave, abForcePersist=True) as BRSSActorScript
         If name != ""
             newActor.SetActorName(name)
         EndIf
-        newActor.SetOutfit(Game.GetFormFromFile(0x03C81B, "Dragonborn.esm") as Outfit)
+        newActor.SetOutfit(Game.GetFormFromFile(0x835, "SkyChild.esp") as Outfit) ; 5 - d
     EndIf
 
     ReleaseLock()
-    Return newActor as BRSSActorScript
+    Return newActor
+EndFunction
+
+Function BuyActor()
+    Actor player = Game.GetPlayer()
+    Form gold = Game.GetForm(0xF)
+
+    Int npcType = BRSS_SelectNpcType.Show()
+    If npcType == 7
+        Return
+    EndIf
+
+    String npcRace = GetRaceByIdx(BRSS_SelectRace.Show())
+    If ! npcRace
+        Return
+    EndIf
+
+    If npcType == 0
+        If player.GetItemCount(gold) >= 500
+            BRSSActorScript newActor = AddActor("Guard", "", npcRace, isVampire=False)
+            newActor.AddToFaction(CWPlayerAlly)
+            player.RemoveItem(gold, 500)
+        Else
+            Debug.Notification("You don't have enough gold.")
+        EndIf
+    ElseIf npcType == 1
+        If player.GetItemCount(gold) >= 1500
+            BRSSActorScript newActor = AddActor("Guard", "", npcRace, isVampire=True)
+            If ! newActor
+                Debug.Notification("This race is currently not available for vampires.")
+                Return
+            EndIf
+            newActor.AddToFaction(CWPlayerAlly)
+            player.RemoveItem(gold, 1500)
+        Else
+            Debug.Notification("You don't have enough gold.")
+        EndIf
+    ElseIf npcType == 2
+        If player.GetItemCount(gold) >= 500
+            BRSSActorScript newActor = AddActor("Slave", "", npcRace, isVampire=False)
+            OBodyNative.ApplyPresetByName(newActor, "Lust")
+            player.RemoveItem(gold, 500)
+        Else
+            Debug.Notification("You don't have enough gold.")
+        EndIf
+    ElseIf npcType == 3
+        If player.GetItemCount(gold) >= 3000
+            If ! AddActor("Slave", "", npcRace, isVampire=True)
+                Debug.Notification("This race is currently not available for vampires.")
+                Return
+            EndIf
+            player.RemoveItem(gold, 3000)
+        Else
+            Debug.Notification("You don't have enough gold.")
+        EndIf
+    ElseIf npcType == 4
+        If player.GetItemCount(gold) >= 1000
+            BRSSActorScript newActor = AddActor("Slave", "", npcRace, isVampire=False)
+            OBodyNative.ApplyPresetByName(newActor, "Pregnant")
+            player.RemoveItem(gold, 1000)
+        Else
+            Debug.Notification("You don't have enough gold.")
+        EndIf
+    ElseIf npcType == 5
+        If player.GetItemCount(gold) >= 500
+            If ! AddActor("Child", "", npcRace, isVampire=False)
+                Debug.Notification("This race is currently not available for children.")
+                Return
+            EndIf
+            player.RemoveItem(gold, 500)
+        Else
+            Debug.Notification("You don't have enough gold.")
+        EndIf
+    ElseIf npcType == 6
+        If player.GetItemCount(gold) >= 3000
+            If ! AddActor("Child", "", npcRace, isVampire=True)
+                Debug.Notification("This race is currently not available for vampire children.")
+                Return
+            EndIf
+            player.RemoveItem(gold, 3000)
+        Else
+            Debug.Notification("You don't have enough gold.")
+        EndIf
+    EndIf
 EndFunction
 
 Function CreateConvoy(Form[] members)
@@ -154,43 +244,92 @@ EndFunction
 ; ##############################################################################
 ; # Private Functions
 ; ##############################################################################
-Function SelectNpcTemplateList(String type, Bool isVampire, Bool isChild)
+Bool Function SelectNpcTemplateList(String type, Bool isVampire, Bool isChild)
     BRSS_LC.Revert()
 
     If type == "breton" && !isVampire && !isChild
         BRSS_LC.AddForm(BRSS_LC_Breton_Female, 1)
+        Return True
     ElseIf type == "breton" && !isVampire && isChild
         BRSS_LC.AddForm(BRSS_LC_Breton_Female_Child, 1)
+        Return True
     ElseIf type == "breton" && isVampire && !isChild
         BRSS_LC.AddForm(BRSS_LC_Breton_Female_Vampire, 1)
+        Return True
     ElseIf type == "breton" && isVampire && isChild
         BRSS_LC.AddForm(BRSS_LC_Breton_Female_Vampire_Child, 1)
+        Return True
     ElseIf type == "darkelf" && !isVampire && !isChild
         BRSS_LC.AddForm(BRSS_LC_DarkElf_Female, 1)
+        Return True
     ElseIf type == "darkelf" && isVampire && !isChild
         BRSS_LC.AddForm(BRSS_LC_DarkElf_Female_Vampire, 1)
+        Return True
     ElseIf type == "highelf" && !isVampire && !isChild
         BRSS_LC.AddForm(BRSS_LC_HighElf_Female, 1)
+        Return True
     ElseIf type == "highelf" && isVampire && !isChild
         BRSS_LC.AddForm(BRSS_LC_HighElf_Female_Vampire, 1)
+        Return True
     ElseIf type == "imperial" && !isVampire && !isChild
         BRSS_LC.AddForm(BRSS_LC_Imperial_Female, 1)
+        Return True
     ElseIf type == "imperial" && !isVampire && isChild
         BRSS_LC.AddForm(BRSS_LC_Imperial_Female_Child, 1)
+        Return True
     ElseIf type == "imperial" && isVampire && !isChild
         BRSS_LC.AddForm(BRSS_LC_Imperial_Female_Vampire, 1)
+        Return True
     ElseIf type == "nord" && !isVampire && !isChild
         BRSS_LC.AddForm(BRSS_LC_Nord_Female, 1)
+        Return True
     ElseIf type == "nord" && !isVampire && isChild
         BRSS_LC.AddForm(BRSS_LC_Nord_Female_Child, 1)
+        Return True
     ElseIf type == "nord" && isVampire && !isChild
         BRSS_LC.AddForm(BRSS_LC_Nord_Female_Vampire, 1)
+        Return True
     ElseIf type == "redguard" && !isVampire && !isChild
         BRSS_LC.AddForm(BRSS_LC_Redguard_Female, 1)
+        Return True
     ElseIf type == "redguard" && !isVampire && isChild
         BRSS_LC.AddForm(BRSS_LC_Redguard_Female_Child, 1)
+        Return True
     ElseIf type == "woodelf" && !isVampire && !isChild
         BRSS_LC.AddForm(BRSS_LC_WoodElf_Female, 1)
+        Return True
+    EndIf
+
+    Return False
+EndFunction
+
+String Function GetRaceByIdx(Int idx)
+    If idx == 0
+        Return "nord"
+    ElseIf idx == 1
+        Return "breton"
+    ElseIf idx == 2
+        Return "darkelf"
+    ElseIf idx == 3
+        Return "highelf"
+    ElseIf idx == 4
+        Return "imperial"
+    ElseIf idx == 5
+        Return "redguard"
+    ElseIf idx == 6
+        Return "woodelf"
+    EndIf
+EndFunction
+
+String Function GetRaceByIdxChild(Int idx)
+    If idx == 0
+        Return "nord"
+    ElseIf idx == 1
+        Return "breton"
+    ElseIf idx == 2
+        Return "imperial"
+    ElseIf idx == 3
+        Return "redguard"
     EndIf
 EndFunction
 

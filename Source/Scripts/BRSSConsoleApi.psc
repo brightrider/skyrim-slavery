@@ -13,28 +13,17 @@ EndFunction
 String Function ActorList(String filter, Float radius) global
     String result = ""
 
-    Keyword actorKwd = Game.GetFormFromFile(0x00042524, "SkyrimSlavery.esp") as Keyword
+    Actor player = Game.GetPlayer()
     Faction factionAll = Game.GetFormFromFile(0x00005900, "SkyrimSlavery.esp") as Faction
 
-    Actor[] actors
-    ObjectReference[] actorsAsRefs
-    If radius > 0.0
-        actorsAsRefs = PO3_SKSEFunctions.FindAllReferencesWithKeyword(Game.GetPlayer(), actorKwd, radius, abMatchAll=False)
-    Else
-        actors = PO3_SKSEFunctions.GetAllActorsInFaction(factionAll)
-    EndIf
-
+    Actor[] actors = PO3_SKSEFunctions.GetAllActorsInFaction(factionAll)
     Int i = 0
-    While i < actors.Length || i < actorsAsRefs.Length
-        BRSSActorScript act = actors[i] as BRSSActorScript
-        If act == None
-            act = actorsAsRefs[i] as BRSSActorScript
-        EndIf
-
-        String line = act.GetDescription() + "\n"
-
-        If !filter || StringUtil.Find(line, filter) != -1
-            result += line
+    While i < actors.Length
+        If radius <= 0.0 || actors[i].GetDistance(player) <= radius
+            String line = (actors[i] as BRSSActorScript).GetDescription() + "\n"
+            If !filter || StringUtil.Find(line, filter) != -1
+                result += line
+            EndIf
         EndIf
 
         i += 1
@@ -45,6 +34,16 @@ EndFunction
 
 String Function ActorRename(Actor actorId, String name) global
     (actorId as BRSSActorScript).SetActorName(name)
+    Return ""
+EndFunction
+
+String Function ActorDel(Actor actorId) global
+    (actorId as BRSSActorScript).RemoveFromBRSS()
+    Return ""
+EndFunction
+
+String Function ActorSetOutfit(Actor actorId, Outfit outfitForm) global
+    (actorId as BRSSActorScript).SetOutfit(outfitForm)
     Return ""
 EndFunction
 
@@ -67,15 +66,7 @@ EndFunction
 
 String Function ActorUse(Actor actorId, String targetId, String targetActorName) global
     BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
-
-    ObjectReference target
-    If StringUtil.GetNthChar(targetId, 0) == "0" && StringUtil.GetNthChar(targetId, 1) == "x"
-        target = Game.GetFormEx(PO3_SKSEFunctions.StringToInt(targetId)) as ObjectReference
-    Else
-        target = controller.Get(targetId)
-    EndIf
-
-    (actorId as BRSSActorScript).Use(target, BRSSUtil.GetActorByDisplayName(targetActorName))
+    (actorId as BRSSActorScript).Use(BRSSUtil.GetRef(targetId), BRSSUtil.GetActorByDisplayName(targetActorName))
     Return ""
 EndFunction
 
@@ -147,9 +138,9 @@ String Function MarkerGridDel(String name) global
     Return ""
 EndFunction
 
-String Function TrackingTrack(Int slot, String name) global
+String Function TrackingTrack(Int slot, String targetId) global
     BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
-    controller.TrackOnMap(slot, BRSSUtil.GetActorByDisplayName(name))
+    controller.TrackOnMap(slot, BRSSUtil.GetRef(targetId))
     Return ""
 EndFunction
 
@@ -160,7 +151,7 @@ String Function TrackingList() global
     Int i
     While i < 10
         ObjectReference ref = (controller.GetAliasById(i + 2) as ReferenceAlias).GetReference()
-        result += "Slot " + i + ": " + ref.GetDisplayName() + "\n"
+        result += "Slot " + i + ": " + BRSSUtil.GetName(ref) + "\n"
         i += 1
     EndWhile
 

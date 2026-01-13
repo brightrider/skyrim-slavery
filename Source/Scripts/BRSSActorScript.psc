@@ -2,14 +2,10 @@ Scriptname BRSSActorScript extends Actor
 
 Faction Property BRSS_Actors Auto
 Faction Property BRSS_Guards Auto
+Faction Property BRSS_Guards_Trader Auto
 Faction Property BRSS_Slaves Auto
+Faction Property BRSS_Slaves_Dead Auto
 
-Package Property BRSS_Guard_Wait Auto
-Package Property BRSS_Guard_Travel Auto
-Package Property BRSS_Guard_Follow Auto
-Package Property BRSS_Guard_UseIdleMarker Auto
-Package Property BRSS_Guard_UseWeapon Auto
-Package Property BRSS_Guard_UseMagic Auto
 Keyword Property BRSS_PackageKeyword1 Auto
 Keyword Property BRSS_PackageKeyword2 Auto
 
@@ -44,6 +40,14 @@ Event OnGameLoaded(String eventName, String strArg, Float numArg, Form sender)
     BRSSLogger.LogInfo("BRSSActor", Self, "Initialized (Game Loaded)")
 
     ReleaseLock()
+EndEvent
+
+Event OnActivate(ObjectReference akActionRef)
+    BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
+
+    If IsInFaction(BRSS_Guards_Trader)
+        controller.BuyActor()
+    EndIf
 EndEvent
 
 Bool Function IsGuard()
@@ -263,23 +267,22 @@ String Function GetDescription()
 
     String procedure = "No action assigned"
     Int procedureCode = GetAV("Variable08") as Int
-    ; TODO: Improve this
     If procedureCode == 0
         procedure = "Idle"
     ElseIf procedureCode == 1
-        procedure = "Traveling to " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1))
+        procedure = "Traveling to " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword1))
     ElseIf procedureCode == 2
-        procedure = "Following " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1))
+        procedure = "Following " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword1))
     ElseIf procedureCode == 3
-        procedure = "Using Idle Marker " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1)) + " with target " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword2))
+        procedure = "Using Idle Marker " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword1))
     ElseIf procedureCode == 4 || procedureCode == 9
-        procedure = "Using weapon on " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword2))
+        procedure = "Using weapon on " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword2))
     ElseIf procedureCode == 6
-        procedure = "Patrolling between " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1)) + " and " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword2))
+        procedure = "Patrolling between " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword1)) + " and " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword2))
     ElseIf procedureCode == 7
-        procedure = "Aiming at " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword2))
+        procedure = "Aiming at " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword2))
     ElseIf procedureCode == 8
-        procedure = "Sitting at " + BRSSLogger.GetLogID(GetLinkedRef(BRSS_PackageKeyword1))
+        procedure = "Sitting at " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword1))
     EndIf
 
     Return                                                                             \
@@ -291,6 +294,12 @@ String Function GetDescription()
         GetCurrentLocation().GetName() + "(" + distance + ")"                         +\
         "] "                                                                          +\
         procedure
+EndFunction
+
+Function RemoveFromBRSS()
+    RemoveFromFaction(BRSS_Actors)
+    RemoveFromFaction(BRSS_Guards)
+    RemoveFromFaction(BRSS_Slaves)
 EndFunction
 
 ; ##############################################################################

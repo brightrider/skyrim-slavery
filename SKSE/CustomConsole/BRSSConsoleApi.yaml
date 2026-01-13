@@ -49,6 +49,25 @@ subs:
       - name: name
         type: String
         help: New actor name
+  - name: actor-del
+    func: ActorDel
+    help: Delete an actor from BRSS
+    args:
+      - name: actorId
+        type: Actor
+        help: Actor ID
+        selected: true
+  - name: actor-set-outfit
+    func: ActorSetOutfit
+    help: Set an actor's outfit
+    args:
+      - name: actorId
+        type: Actor
+        help: Actor ID
+        selected: true
+      - name: outfitForm
+        type: Outfit
+        help: Outfit form
   - name: actor-wait
     func: ActorWait
     help: Set actor action to idle
@@ -85,7 +104,7 @@ subs:
         selected: true
       - name: targetId
         type: String
-        help: Marker name or target reference ID (0x...)
+        help: BRSS marker name, any hex id (default=selected)
       - name: targetActorName
         type: String
         help: Target actor name (optional)
@@ -202,8 +221,8 @@ subs:
         required: false
       - name: offsetY
         type: Int
-        help: Y offset between markers (default=256)
-        default: 256
+        help: Y offset between markers (default=384)
+        default: 384
         required: false
   - name: marker-grid-del
     func: MarkerGridDel
@@ -214,20 +233,20 @@ subs:
         help: Base marker name
   - name: tracking-track
     func: TrackingTrack
-    help: Start tracking an actor on the map
+    help: Start tracking an object on the map
     args:
       - name: slot
         type: Int
         help: Tracking slot (0-9)
-      - name: name
+      - name: targetId
         type: String
-        help: Actor name
+        help: BRSS actor name, BRSS marker name, any hex id (default=selected)
   - name: tracking-list
     func: TrackingList
     help: List tracking slots
   - name: tracking-untrack
     func: TrackingUntrack
-    help: Stop tracking an actor on the map
+    help: Stop tracking an object on the map
     args:
       - name: slot
         type: Int
