@@ -162,10 +162,10 @@ Function BuyActor()
     EndIf
 EndFunction
 
-Function CreateConvoy(Form[] members)
+Function CreateConvoy(Actor[] members)
     Int i = 1
     While i < members.Length
-        (members[i] as BRSSActorScript).Follow(members[i - 1] as ObjectReference)
+        (members[i] as BRSSActorScript).Follow(members[i - 1])
         i += 1
     EndWhile
 EndFunction
@@ -180,7 +180,7 @@ Function UntrackOnMap(Int slot)
     (GetAliasById(slot + 2) as ReferenceAlias).Clear()
 EndFunction
 
-Function ExecutionSetup(Form[] guards, Form[] slaves, String markerGridName)
+Function ExecutionSetup(Actor[] guards, Actor[] slaves, String markerGridName)
     BRSSMarkerControllerScript markerController = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
 
     Int i = 0

@@ -1,22 +1,17 @@
 Scriptname BRSSUtil
 
-Actor[] Function GetAllActors() global
-    Return PO3_SKSEFunctions.GetAllActorsInFaction(Game.GetFormFromFile(0x00005900, "SkyrimSlavery.esp") as Faction)
-EndFunction
+Actor[] Function GetActors(Faction akFaction, String[] asDisplayNames=None, Float afRadius=0.0, Int aiNumResults=0) global native
+
+Actor[] Function OrderActorsByDisplayNames(Actor[] akActors, String[] asDisplayNames) global native
 
 Actor Function GetActorByDisplayName(String name) global
     If ! name
         Return None
     EndIf
 
-    Actor[] actors = GetAllActors()
-    Int i = 0
-    While i < actors.Length
-        If actors[i].GetDisplayName() == name
-            Return actors[i]
-        EndIf
-        i += 1
-    EndWhile
+    String[] names = new String[1]
+    names[0] = name
+    Return GetActors(Game.GetFormFromFile(0x5900, "SkyrimSlavery.esp") as Faction, names, aiNumResults=1)[0]
 EndFunction
 
 Actor Function GetPlayerOrActorByDisplayName(String name) global
@@ -92,14 +87,10 @@ ObjectReference Function GetRef(String id) global
     Return GetActorOrMarkerByDisplayName(id)
 EndFunction
 
-Form[] Function DisplayNamesToRefArray(String arg, String sep=",") global
+Actor[] Function DisplayNamesToRefArray(String arg, String sep=",") global
     String[] parts = StringUtil.Split(arg, sep)
-    Form[] result = Utility.CreateFormArray(parts.Length)
-    Int i = 0
-    While i < parts.Length
-        result[i] = GetPlayerOrActorByDisplayName(parts[i])
-        i += 1
-    EndWhile
 
-    Return result
+    Actor[] npcs = GetActors(Game.GetFormFromFile(0x5900, "SkyrimSlavery.esp") as Faction, parts, aiNumResults=parts.Length)
+
+    Return OrderActorsByDisplayNames(npcs, parts)
 EndFunction

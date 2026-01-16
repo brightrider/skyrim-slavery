@@ -1,0 +1,8 @@
+BasedOnStyle: Google
+IndentPPDirectives: BeforeHash
+NamespaceIndentation: All
+AccessModifierOffset: -4
+UseTab: Never
+IndentWidth: 4
+TabWidth: 4
+ColumnLimit: 120

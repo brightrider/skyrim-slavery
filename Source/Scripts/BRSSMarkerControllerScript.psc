@@ -2,7 +2,17 @@ Scriptname BRSSMarkerControllerScript extends Quest
 
 Form Property EmptyIdleMarker Auto
 
+Int Markers
+Int MarkerNames
+
 Bool Lock = False
+
+Event OnInit()
+    Markers = JFormMap.object()
+    MarkerNames = JMap.object()
+    JValue.retain(Markers)
+    JValue.retain(MarkerNames)
+EndEvent
 
 ObjectReference Function Add(String name, Form markerForm=None)
     AcquireLock()
@@ -20,8 +30,8 @@ ObjectReference Function Add(String name, Form markerForm=None)
 
     marker.SetAngle(0.0, 0.0, marker.GetAngleZ())
 
-    StorageUtil.StringListAdd(None, "BRSS_MarkerNames", name, allowDuplicate=False)
-    StorageUtil.FormListAdd(None, "BRSS_Markers", marker, allowDuplicate=False)
+    JMap.setForm(MarkerNames, name, marker)
+    JFormMap.setStr(Markers, marker, name)
 
     ReleaseLock()
     Return marker
@@ -30,8 +40,7 @@ EndFunction
 ObjectReference Function Get(String name, Bool bypassLock=False)
     AcquireLock(bypassLock)
 
-    Int idx = StorageUtil.StringListFind(None, "BRSS_MarkerNames", name)
-    ObjectReference marker = StorageUtil.FormListGet(None, "BRSS_Markers", idx) as ObjectReference
+    ObjectReference marker = JMap.getForm(MarkerNames, name) as ObjectReference
 
     ReleaseLock(bypassLock)
     Return marker
@@ -40,8 +49,7 @@ EndFunction
 String Function GetMarkerName(ObjectReference marker, Bool bypassLock=False)
     AcquireLock(bypassLock)
 
-    Int idx = StorageUtil.FormListFind(None, "BRSS_Markers", marker)
-    String name = StorageUtil.StringListGet(None, "BRSS_MarkerNames", idx)
+    String name = JFormMap.getStr(Markers, marker)
 
     ReleaseLock(bypassLock)
     Return name
@@ -55,9 +63,11 @@ Function Rename(String oldName, String newName)
         Return
     EndIf
 
-    Int idx = StorageUtil.StringListFind(None, "BRSS_MarkerNames", oldName)
-    If idx >= 0
-        StorageUtil.StringListSet(None, "BRSS_MarkerNames", idx, newName)
+    ObjectReference marker = JMap.getForm(MarkerNames, oldName) as ObjectReference
+    If marker
+        JMap.removeKey(MarkerNames, oldName)
+        JMap.setForm(MarkerNames, newName, marker)
+        JFormMap.setStr(Markers, marker, newName)
     EndIf
 
     ReleaseLock()
@@ -66,15 +76,13 @@ EndFunction
 Bool Function Remove(String name)
     AcquireLock()
 
-    Int idx = StorageUtil.StringListFind(None, "BRSS_MarkerNames", name)
-    If idx == -1
+    ObjectReference marker = JMap.getForm(MarkerNames, name) as ObjectReference
+    If ! marker
         ReleaseLock()
         Return False
     EndIf
-    ObjectReference marker = StorageUtil.FormListGet(None, "BRSS_Markers", idx) as ObjectReference
-
-    StorageUtil.StringListRemoveAt(None, "BRSS_MarkerNames", idx)
-    StorageUtil.FormListRemoveAt(None, "BRSS_Markers", idx)
+    JMap.removeKey(MarkerNames, name)
+    JFormMap.removeKey(Markers, marker)
 
     marker.Delete()
 
@@ -85,12 +93,10 @@ EndFunction
 String Function GetList(String filter="", Float radius=0.0)
     String result
 
-    AcquireLock()
-
-    Int i
-    While i < StorageUtil.StringListCount(None, "BRSS_MarkerNames")
-        String name = StorageUtil.StringListGet(None, "BRSS_MarkerNames", i)
-        ObjectReference marker = StorageUtil.FormListGet(None, "BRSS_Markers", i) as ObjectReference
+    String _key = JMap.nextKey(MarkerNames)
+    While _key
+        String name = _key
+        ObjectReference marker = JMap.getForm(MarkerNames, _key) as ObjectReference
 
         Float distance = marker.GetDistance(Game.GetPlayer())
         If radius <= 0.0 || distance <= radius
@@ -110,10 +116,9 @@ String Function GetList(String filter="", Float radius=0.0)
             EndIf
         EndIf
 
-        i += 1
+        _key = JMap.nextKey(MarkerNames, _key)
     EndWhile
 
-    ReleaseLock()
     Return result
 EndFunction
 

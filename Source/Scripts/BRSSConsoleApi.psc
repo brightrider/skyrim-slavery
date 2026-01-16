@@ -13,17 +13,12 @@ EndFunction
 String Function ActorList(String filter, Float radius) global
     String result = ""
 
-    Actor player = Game.GetPlayer()
-    Faction factionAll = Game.GetFormFromFile(0x00005900, "SkyrimSlavery.esp") as Faction
-
-    Actor[] actors = PO3_SKSEFunctions.GetAllActorsInFaction(factionAll)
+    Actor[] actors = BRSSUtil.GetActors(Game.GetFormFromFile(0x5900, "SkyrimSlavery.esp") as Faction, afRadius=radius)
     Int i = 0
     While i < actors.Length
-        If radius <= 0.0 || actors[i].GetDistance(player) <= radius
-            String line = (actors[i] as BRSSActorScript).GetDescription() + "\n"
-            If !filter || StringUtil.Find(line, filter) != -1
-                result += line
-            EndIf
+        String line = (actors[i] as BRSSActorScript).GetDescription() + "\n"
+        If !filter || StringUtil.Find(line, filter) != -1
+            result += line
         EndIf
 
         i += 1
