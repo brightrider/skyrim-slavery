@@ -4,6 +4,9 @@ Actor[] Function GetActors(Faction akFaction, String[] asDisplayNames=None, Floa
 
 Actor[] Function OrderActorsByDisplayNames(Actor[] akActors, String[] asDisplayNames) global native
 
+Function LogActors(Form[] akMarkers, String[] asMarkerNames, String asFilter="", Float afRadius=0.0) global native
+Function LogMarkers(Form[] akMarkers, String[] asMarkerNames, String asFilter="", Float afRadius=0.0) global native
+
 Actor Function GetActorByDisplayName(String name) global
     If ! name
         Return None

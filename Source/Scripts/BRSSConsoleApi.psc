@@ -11,20 +11,8 @@ String Function ActorAdd(String actorType, String name, String actorRace, Bool i
 EndFunction
 
 String Function ActorList(String filter, Float radius) global
-    String result = ""
-
-    Actor[] actors = BRSSUtil.GetActors(Game.GetFormFromFile(0x5900, "SkyrimSlavery.esp") as Faction, afRadius=radius)
-    Int i = 0
-    While i < actors.Length
-        String line = (actors[i] as BRSSActorScript).GetDescription() + "\n"
-        If !filter || StringUtil.Find(line, filter) != -1
-            result += line
-        EndIf
-
-        i += 1
-    EndWhile
-
-    Return result
+    BRSSUtil.LogActors(StorageUtil.FormListToArray(None, "BRSS_Markers"), StorageUtil.StringListToArray(None, "BRSS_MarkerNames"), filter, radius)
+    Return ""
 EndFunction
 
 String Function ActorRename(Actor actorId, String name) global

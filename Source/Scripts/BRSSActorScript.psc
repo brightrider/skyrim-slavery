@@ -25,8 +25,6 @@ Event OnInit()
     If IsSlave()
         ForceAV("Health", 1.0)
     EndIf
-
-    BRSSLogger.LogInfo("BRSSActor", Self, "Initialized")
 EndEvent
 
 Event OnGameLoaded(String eventName, String strArg, Float numArg, Form sender)
@@ -36,8 +34,6 @@ Event OnGameLoaded(String eventName, String strArg, Float numArg, Form sender)
     PO3_SKSEFunctions.SetLinkedRef(Self, LinkedRefs[1], BRSS_PackageKeyword2)
 
     SetDisplayName(Name)
-
-    BRSSLogger.LogInfo("BRSSActor", Self, "Initialized (Game Loaded)")
 
     ReleaseLock()
 EndEvent
@@ -247,53 +243,6 @@ Function SetActorName(String value)
 
     Name = value
     SetDisplayName(value)
-EndFunction
-
-String Function GetDescription()
-    String type = "Guard"
-    If IsInFaction(BRSS_Slaves)
-        type = "Slave"
-    EndIf
-
-    String aliveStatus = "Alive"
-    If IsDead()
-        aliveStatus = "Dead"
-    EndIf
-
-    Float distance = GetDistance(Game.GetPlayer())
-    If distance > 1000000.0 || distance < 0.0
-        distance = -1.0
-    EndIf
-
-    String procedure = "No action assigned"
-    Int procedureCode = GetAV("Variable08") as Int
-    If procedureCode == 0
-        procedure = "Idle"
-    ElseIf procedureCode == 1
-        procedure = "Traveling to " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword1))
-    ElseIf procedureCode == 2
-        procedure = "Following " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword1))
-    ElseIf procedureCode == 3
-        procedure = "Using Idle Marker " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword1))
-    ElseIf procedureCode == 4 || procedureCode == 9
-        procedure = "Using weapon on " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword2))
-    ElseIf procedureCode == 6
-        procedure = "Patrolling between " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword1)) + " and " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword2))
-    ElseIf procedureCode == 7
-        procedure = "Aiming at " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword2))
-    ElseIf procedureCode == 8
-        procedure = "Sitting at " + BRSSUtil.GetName(GetLinkedRef(BRSS_PackageKeyword1))
-    EndIf
-
-    Return                                                                             \
-        GetDisplayName()                                                              +\
-        "["                                                                           +\
-        BRSSUtil.GetFormID(Self)                                               + ", " +\
-        type                                                                   + ", " +\
-        aliveStatus                                                            + ", " +\
-        GetCurrentLocation().GetName() + "(" + distance + ")"                         +\
-        "] "                                                                          +\
-        procedure
 EndFunction
 
 Function RemoveFromBRSS()
