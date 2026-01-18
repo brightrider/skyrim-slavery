@@ -33,6 +33,9 @@ ObjectReference Function Add(String name, Form markerForm=None)
     JMap.setForm(MarkerNames, name, marker)
     JFormMap.setStr(Markers, marker, name)
 
+    StorageUtil.StringListAdd(None, "BRSS_MarkerNames", name)
+    StorageUtil.FormListAdd(None, "BRSS_Markers", marker)
+
     ReleaseLock()
     Return marker
 EndFunction
@@ -70,6 +73,11 @@ Function Rename(String oldName, String newName)
         JFormMap.setStr(Markers, marker, newName)
     EndIf
 
+    Int idx = StorageUtil.StringListFind(None, "BRSS_MarkerNames", oldName)
+    If idx >= 0
+        StorageUtil.StringListSet(None, "BRSS_MarkerNames", idx, newName)
+    EndIf
+
     ReleaseLock()
 EndFunction
 
@@ -84,6 +92,12 @@ Bool Function Remove(String name)
     JMap.removeKey(MarkerNames, name)
     JFormMap.removeKey(Markers, marker)
 
+    Int idx = StorageUtil.StringListFind(None, "BRSS_MarkerNames", name)
+    If idx >= 0
+        StorageUtil.StringListRemoveAt(None, "BRSS_MarkerNames", idx)
+        StorageUtil.FormListRemoveAt(None, "BRSS_Markers", idx)
+    EndIf
+
     marker.Delete()
 
     ReleaseLock()
@@ -91,35 +105,12 @@ Bool Function Remove(String name)
 EndFunction
 
 String Function GetList(String filter="", Float radius=0.0)
-    String result
+    AcquireLock()
 
-    String _key = JMap.nextKey(MarkerNames)
-    While _key
-        String name = _key
-        ObjectReference marker = JMap.getForm(MarkerNames, _key) as ObjectReference
+    BRSSUtil.LogMarkers(StorageUtil.FormListToArray(None, "BRSS_Markers"), StorageUtil.StringListToArray(None, "BRSS_MarkerNames"), filter, radius)
 
-        Float distance = marker.GetDistance(Game.GetPlayer())
-        If radius <= 0.0 || distance <= radius
-            If distance > 1000000.0 || distance < 0.0
-                distance = -1.0
-            EndIf
-
-            name += "["
-            name += BRSSUtil.GetFormID(marker) + ", "
-            name += BRSSUtil.GetName(marker, skipMarkerName=True) + ", "
-            name += marker.GetCurrentLocation().GetName() + "(" + distance + ")"
-            name += "]"
-            name += "\n"
-
-            If !filter || StringUtil.Find(name, filter) != -1
-                result += name
-            EndIf
-        EndIf
-
-        _key = JMap.nextKey(MarkerNames, _key)
-    EndWhile
-
-    Return result
+    ReleaseLock()
+    Return ""
 EndFunction
 
 Function CreateGrid(String name, Int[] grid, Int width, Form markerForm=None, Int offX=128, Int offY=384)

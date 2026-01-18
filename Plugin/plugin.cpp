@@ -1,9 +1,10 @@
+#include <Shlwapi.h>
 #include <Windows.h>
-
-#include <ranges>
 
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/sinks/msvc_sink.h"
+
+#pragma comment(lib, "Shlwapi.lib")
 
 // Copyright (c) 2021-2025 powerofthree
 // See LICENSES/MIT-powerofthree.txt
@@ -105,6 +106,101 @@ std::vector<RE::Actor*> OrderActorsByDisplayNames(RE::StaticFunctionTag*, std::v
     return result;
 }
 
+void LogMarkers(RE::StaticFunctionTag*, std::vector<RE::TESForm*> a_markers,
+                std::vector<RE::BSFixedString> a_markerNames, std::string a_filter = "", float a_radius = 0.0f) {
+    if (a_markers.size() != a_markerNames.size()) {
+        return;
+    }
+
+    const auto player = RE::PlayerCharacter::GetSingleton();
+    if (!player) {
+        return;
+    }
+
+    auto _GetFormEditorID = reinterpret_cast<const char* (*)(std::uint32_t)>(
+        GetProcAddress(GetModuleHandleA("po3_Tweaks.dll"), "GetFormEditorID"));
+
+    std::string line;
+    line.reserve(120);
+
+    char buf[32];
+    for (std::size_t i = 0; i < a_markers.size(); i++) {
+        if (!a_markers[i]) {
+            continue;
+        }
+        RE::TESObjectREFR* marker = a_markers[i]->As<RE::TESObjectREFR>();
+        if (!marker || !marker->GetBaseObject()) {
+            continue;
+        }
+
+        float distanceSquared = marker->GetPosition().GetSquaredDistance(player->GetPosition());
+        if (a_radius > 0.0f && distanceSquared > a_radius * a_radius) {
+            continue;
+        }
+        float distance;
+        if (distanceSquared > 1000000.0f * 1000000.0f) {
+            distance = -1;
+        } else {
+            distance = sqrt(distanceSquared);
+        }
+
+        line.clear();
+
+        line.append(a_markerNames[i].c_str() ? a_markerNames[i].c_str() : "unknown");
+        line.append("[");
+
+        auto [ptr1, ec1] = std::to_chars(buf, buf + sizeof(buf), marker->GetFormID(), 16);
+        if (ec1 == std::errc{}) {
+            line.append(buf, ptr1);
+        } else {
+            line.append("unknown");
+        }
+        line.append(", ");
+
+        const char* desc = marker->GetDisplayFullName();
+        if (!desc || desc[0] == '\0' || strstr(desc, "not be visible")) {
+            desc = marker->GetBaseObject()->GetName();
+            if (!desc || desc[0] == '\0' || strstr(desc, "not be visible")) {
+                desc = marker->GetFormEditorID();
+                if (!desc || desc[0] == '\0') {
+                    if (_GetFormEditorID) {
+                        desc = _GetFormEditorID(marker->GetBaseObject()->GetFormID());
+                    }
+                }
+            }
+        }
+        line.append(desc ? desc : "unknown");
+        line.append(", ");
+
+        const char* locStr = "unknown";
+        RE::BGSLocation* loc = marker->GetCurrentLocation();
+        if (loc) {
+            const char* locName = loc->GetName();
+            if (locName && locName[0] != '\0') {
+                locStr = locName;
+            }
+        }
+        line.append(locStr);
+
+        line.append("(");
+        auto [ptr2, ec2] = std::to_chars(buf, buf + sizeof(buf), distance, std::chars_format::fixed, 2);
+        if (ec2 == std::errc{}) {
+            line.append(buf, ptr2);
+        } else {
+            line.append("unknown");
+        }
+        line.append(")");
+
+        line.append("]");
+
+        if (!a_filter.empty() && !StrStrIA(line.c_str(), a_filter.c_str())) {
+            continue;
+        }
+
+        RE::ConsoleLog::GetSingleton()->Print(line.c_str());
+    }
+}
+
 static bool InitializeLogger() {
     auto logdir = SKSE::log::log_directory();
     if (!logdir) {
@@ -135,6 +231,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     SKSE::GetPapyrusInterface()->Register([](RE::BSScript::IVirtualMachine* vm) {
         vm->RegisterFunction("GetActors", "BRSSUtil", GetActors);
         vm->RegisterFunction("OrderActorsByDisplayNames", "BRSSUtil", OrderActorsByDisplayNames);
+        vm->RegisterFunction("LogMarkers", "BRSSUtil", LogMarkers);
 
         return true;
     });
