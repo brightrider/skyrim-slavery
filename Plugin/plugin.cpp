@@ -289,6 +289,11 @@ void LogActors(RE::StaticFunctionTag*, std::vector<RE::TESForm*> a_markers,
                 line.append(nameP2);
                 break;
 
+            case 10:
+                line.append("Using Idle Marker ");
+                line.append(nameP1);
+                break;
+
             default:
                 line.append("No action assigned");
                 break;

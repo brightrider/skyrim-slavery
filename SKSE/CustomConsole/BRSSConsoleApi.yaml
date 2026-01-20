@@ -109,6 +109,10 @@ subs:
         type: String
         help: Target actor name (optional)
         required: false
+      - name: miningRes
+        type: String
+        help: Mining resource type (default=none)
+        required: false
   - name: actor-patrol
     func: ActorPatrol
     help: Make an actor patrol between the specified markers
@@ -134,6 +138,10 @@ subs:
       - name: name
         type: String
         help: Actor name
+      - name: periodicAttack
+        type: Bool
+        help: Whether to periodically attack (default=false)
+        required: false
   - name: actor-use-weapon
     func: ActorUseWeapon
     help: Make an actor use a weapon on the specified actor

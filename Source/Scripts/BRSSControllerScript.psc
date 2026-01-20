@@ -54,6 +54,7 @@ BRSSActorScript Function AddActor(String actorType, String name="", String actor
         If name != ""
             newActor.SetActorName(name)
         EndIf
+        newActor.AddItem(Game.GetFormFromFile(0x6004, "ZaZAnimationPack.esm"), abSilent=True)
     ElseIf actorType == "Slave"
         If ! SelectNpcTemplateList(actorRace, isVampire, False)
             ReleaseLock()
@@ -72,7 +73,7 @@ BRSSActorScript Function AddActor(String actorType, String name="", String actor
         If name != ""
             newActor.SetActorName(name)
         EndIf
-        newActor.SetOutfit(Game.GetFormFromFile(0x835, "SkyChild.esp") as Outfit) ; 5 - d
+        ; newActor.SetOutfit(Game.GetFormFromFile(0x835, "SkyChild.esp") as Outfit) ; 5 - d
     EndIf
 
     ReleaseLock()
