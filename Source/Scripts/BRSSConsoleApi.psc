@@ -26,7 +26,11 @@ String Function ActorDel(Actor actorId) global
 EndFunction
 
 String Function ActorSetOutfit(Actor actorId, Outfit outfitForm) global
-    (actorId as BRSSActorScript).SetOutfit(outfitForm)
+    If outfitForm
+        (actorId as BRSSActorScript).SetOutfit(outfitForm)
+    Else
+        (actorId as BRSSActorScript).SetOutfit(Game.GetFormFromFile(0x023F22, "SkyrimSlavery.esp") as Outfit)
+    EndIf
     Return ""
 EndFunction
 
@@ -47,9 +51,9 @@ String Function ActorFollow(String actorList) global
     Return ""
 EndFunction
 
-String Function ActorUse(Actor actorId, String targetId, String targetActorName) global
+String Function ActorUse(Actor actorId, String targetId, String targetActorName, String miningRes) global
     BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
-    (actorId as BRSSActorScript).Use(BRSSUtil.GetRef(targetId), BRSSUtil.GetActorByDisplayName(targetActorName))
+    (actorId as BRSSActorScript).Use(BRSSUtil.GetRef(targetId), BRSSUtil.GetActorByDisplayName(targetActorName), miningRes)
     Return ""
 EndFunction
 
@@ -59,9 +63,9 @@ String Function ActorPatrol(Actor actorId, String point1, String point2) global
     Return ""
 EndFunction
 
-String Function ActorAim(Actor actorId, String name) global
+String Function ActorAim(Actor actorId, String name, Bool periodicAttack) global
     BRSSMarkerControllerScript controller = Game.GetFormFromFile(0x00047627, "SkyrimSlavery.esp") as BRSSMarkerControllerScript
-    (actorId as BRSSActorScript).Aim(BRSSUtil.GetActorByDisplayName(name), None)
+    (actorId as BRSSActorScript).Aim(BRSSUtil.GetActorByDisplayName(name), None, periodicAttack)
     Return ""
 EndFunction
 
