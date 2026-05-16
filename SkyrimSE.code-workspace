@@ -1,0 +1,21 @@
+{
+    // created by vscode papyrus-lang papyrus.skyrimSpecialEdition.generateProject
+    "folders": [
+        {
+            "name": "SkyrimSlavery",
+            "path": "."
+        }
+    ],
+    "settings": {
+        "cmake.useCMakePresets": "always",
+        "cmake.sourceDirectory": "${workspaceFolder:SkyrimSlavery}/Plugin",
+        "cmake.copyCompileCommands": "${workspaceFolder:SkyrimSlavery}/Plugin/compile_commands.json",
+        "clangd.arguments": [
+            "--query-driver=C:/Program Files/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+            "--header-insertion=never"
+        ],
+        "papyrus.skyrimSpecialEdition.enabled": true,
+        "papyrus.fallout4.enabled": false,
+        "papyrus.skyrim.enabled": false
+    }
+}
