@@ -2,9 +2,7 @@
 
 #include "SKSEMenuFramework.h"
 
-static void __stdcall RenderWindow() {
-    ImGuiMCP::Text("Hello from ImGui");
-}
+#include "UI/actorListView.h"
 
 void UI::Register() {
     if (!SKSEMenuFramework::IsInstalled()) {
@@ -12,5 +10,5 @@ void UI::Register() {
     }
 
     SKSEMenuFramework::SetSection("Skyrim Slavery");
-    SKSEMenuFramework::AddSectionItem("Main", RenderWindow);
+    SKSEMenuFramework::AddSectionItem("Actor list", RenderActorListView);
 }

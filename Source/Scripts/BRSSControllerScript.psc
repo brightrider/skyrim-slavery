@@ -26,10 +26,24 @@ Faction Property CWPlayerAlly Auto
 Message Property BRSS_SelectNpcType Auto
 Message Property BRSS_SelectRace Auto
 
+Int ActorDb = 0
+
 Bool Lock = False
 
 BRSSActorScript Function AddActor(String actorType, String name="", String actorRace="", Bool isVampire=False)
     AcquireLock()
+
+    If ActorDb == 0
+        ActorDb = JFormMap.object()
+        JValue.retain(ActorDb)
+
+        Actor[] acts = BRSSUtil.GetActors(Game.GetFormFromFile(0x5900, "SkyrimSlavery.esp") as Faction)
+        Int i = 0
+        While i < acts.Length
+            JFormMap.setForm(ActorDb, acts[i], None)
+            i += 1
+        EndWhile
+    EndIf
 
     BRSSActorScript newActor
 
@@ -75,6 +89,8 @@ BRSSActorScript Function AddActor(String actorType, String name="", String actor
         EndIf
         ; newActor.SetOutfit(Game.GetFormFromFile(0x835, "SkyChild.esp") as Outfit) ; 5 - d
     EndIf
+
+    JFormMap.setForm(ActorDb, newActor, None)
 
     ReleaseLock()
     Return newActor
@@ -161,6 +177,18 @@ Function BuyActor()
             Debug.Notification("You don't have enough gold.")
         EndIf
     EndIf
+EndFunction
+
+Function RemoveActorFromDb(BRSSActorScript ref)
+    AcquireLock()
+
+    JFormMap.removeKey(ActorDb, ref)
+
+    ReleaseLock()
+EndFunction
+
+Int Function GetActorDb()
+    Return ActorDb
 EndFunction
 
 Function CreateConvoy(Actor[] members)

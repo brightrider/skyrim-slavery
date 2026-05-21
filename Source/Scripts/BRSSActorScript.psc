@@ -376,6 +376,9 @@ Function RemoveFromBRSS()
     RemoveFromFaction(BRSS_Actors)
     RemoveFromFaction(BRSS_Guards)
     RemoveFromFaction(BRSS_Slaves)
+
+    BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
+    controller.RemoveActorFromDb(Self)
 EndFunction
 
 ; ##############################################################################

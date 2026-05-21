@@ -4,6 +4,7 @@
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/sinks/msvc_sink.h"
 
+#include "JCAPI.h"
 #include "UI.h"
 
 #pragma comment(lib, "Shlwapi.lib")
@@ -426,12 +427,28 @@ static bool InitializeLogger() {
     return true;
 }
 
+static void OnSKSEMessage(SKSE::MessagingInterface::Message* msg) {
+    if (!msg || msg->type != SKSE::MessagingInterface::kPostLoad) {
+        return;
+    }
+
+    SKSE::GetMessagingInterface()->RegisterListener(JC_PLUGIN_NAME, [](SKSE::MessagingInterface::Message* msg) {
+        if (!msg || msg->type != jc::message_root_interface) {
+            return;
+        }
+
+        JC::Load(jc::root_interface::from_void(msg->data));
+    });
+}
+
 SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     SKSE::Init(skse);
 
     InitializeLogger();
 
     UI::Register();
+
+    SKSE::GetMessagingInterface()->RegisterListener(OnSKSEMessage);
 
     SKSE::GetPapyrusInterface()->Register([](RE::BSScript::IVirtualMachine* vm) {
         vm->RegisterFunction("GetActors", "BRSSUtil", GetActors);
