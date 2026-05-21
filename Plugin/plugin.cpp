@@ -4,6 +4,8 @@
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/sinks/msvc_sink.h"
 
+#include "UI.h"
+
 #pragma comment(lib, "Shlwapi.lib")
 
 // Copyright (c) 2021-2025 powerofthree
@@ -428,6 +430,8 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     SKSE::Init(skse);
 
     InitializeLogger();
+
+    UI::Register();
 
     SKSE::GetPapyrusInterface()->Register([](RE::BSScript::IVirtualMachine* vm) {
         vm->RegisterFunction("GetActors", "BRSSUtil", GetActors);
