@@ -104,6 +104,10 @@ Bool Function Remove(String name)
     Return True
 EndFunction
 
+Int Function GetMarkerDb()
+    Return Markers
+EndFunction
+
 String Function GetList(String filter="", Float radius=0.0)
     AcquireLock()
 

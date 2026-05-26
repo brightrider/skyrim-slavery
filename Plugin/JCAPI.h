@@ -24,6 +24,7 @@ namespace JC
     using JFormMapNextKey = RE::TESForm* (*)(void*, ObjectId, RE::TESForm*, RE::TESForm*);
     using JFormMapGetInt = ObjectId (*)(void*, ObjectId, RE::TESForm*, ObjectId);
     using JFormMapSetInt = void (*)(void*, ObjectId, RE::TESForm*, ObjectId);
+    using JFormMapGetStr = const char* (*)(void*, ObjectId, RE::TESForm*, const char*);
     using JFormMapGetObj = ObjectId (*)(void*, ObjectId, RE::TESForm*, ObjectId);
     using JFormMapSetObj = void (*)(void*, ObjectId, RE::TESForm*, ObjectId);
     using JFormMapGetForm = RE::TESForm* (*)(void*, ObjectId, RE::TESForm*, RE::TESForm*);
@@ -35,6 +36,7 @@ namespace JC
     extern JFormMapNextKey jFormMapNextKey;
     extern JFormMapGetInt jFormMapGetInt;
     extern JFormMapSetInt jFormMapSetInt;
+    extern JFormMapGetStr jFormMapGetStr;
     extern JFormMapGetObj jFormMapGetObj;
     extern JFormMapSetObj jFormMapSetObj;
     extern JFormMapGetForm jFormMapGetForm;
@@ -44,4 +46,5 @@ namespace JC
 
     bool Load(const jc::root_interface* root);
     ObjectId GetActorDb();
+    ObjectId GetMarkerDb();
 }

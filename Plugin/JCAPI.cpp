@@ -2,10 +2,12 @@
 
 #include "PAPI.h"
 
-namespace JC
-{
+namespace JC {
     static std::atomic<ObjectId> ActorDb = 0;
     static std::atomic_bool ActorDbRequested = false;
+
+    static std::atomic<ObjectId> MarkerDb = 0;
+    static std::atomic_bool MarkerDbRequested = false;
 
     void* Domain = nullptr;
 
@@ -13,6 +15,7 @@ namespace JC
     JFormMapNextKey jFormMapNextKey = nullptr;
     JFormMapGetInt jFormMapGetInt = nullptr;
     JFormMapSetInt jFormMapSetInt = nullptr;
+    JFormMapGetStr jFormMapGetStr = nullptr;
     JFormMapGetObj jFormMapGetObj = nullptr;
     JFormMapSetObj jFormMapSetObj = nullptr;
     JFormMapGetForm jFormMapGetForm = nullptr;
@@ -21,13 +24,11 @@ namespace JC
     JFormMapRemoveKey jFormMapRemoveKey = nullptr;
 
     template <class T>
-    static void GetFunc(const jc::reflection_interface* refl, const char* name, const char* cls, T& out)
-    {
+    static void GetFunc(const jc::reflection_interface* refl, const char* name, const char* cls, T& out) {
         out = reinterpret_cast<T>(refl->tes_function_of_class(name, cls));
     }
 
-    bool Load(const jc::root_interface* root)
-    {
+    bool Load(const jc::root_interface* root) {
         if (!root) {
             return false;
         }
@@ -45,6 +46,7 @@ namespace JC
         GetFunc(refl, "nextKey", "JFormMap", jFormMapNextKey);
         GetFunc(refl, "getInt", "JFormMap", jFormMapGetInt);
         GetFunc(refl, "setInt", "JFormMap", jFormMapSetInt);
+        GetFunc(refl, "getStr", "JFormMap", jFormMapGetStr);
         GetFunc(refl, "getObj", "JFormMap", jFormMapGetObj);
         GetFunc(refl, "setObj", "JFormMap", jFormMapSetObj);
         GetFunc(refl, "getForm", "JFormMap", jFormMapGetForm);
@@ -55,8 +57,7 @@ namespace JC
         return true;
     }
 
-    static void RequestActorDb()
-    {
+    static void RequestActorDb() {
         if (ActorDb.load() > 0) {
             return;
         }
@@ -97,8 +98,48 @@ namespace JC
         }
     }
 
-    ObjectId GetActorDb()
-    {
+    static void RequestMarkerDb() {
+        if (MarkerDb.load() > 0) {
+            return;
+        }
+
+        bool expected = false;
+        if (!MarkerDbRequested.compare_exchange_strong(expected, true)) {
+            return;
+        }
+
+        auto dh = RE::TESDataHandler::GetSingleton();
+        auto quest = dh ? dh->LookupForm<RE::TESQuest>(0x0002E123, "SkyrimSlavery.esp") : nullptr;
+
+        if (!quest) {
+            MarkerDbRequested.store(false);
+            return;
+        }
+
+        bool ok = Papyrus::Call(
+            quest,
+            "BRSSMarkerControllerScript",
+            "GetMarkerDb",
+            [](RE::BSScript::Variable result) {
+                if (result.IsInt()) {
+                    std::int32_t id = result.GetSInt();
+
+                    if (id > 0) {
+                        MarkerDb.store(id);
+                        return;
+                    }
+                }
+
+                MarkerDbRequested.store(false);
+            }
+        );
+
+        if (!ok) {
+            MarkerDbRequested.store(false);
+        }
+    }
+
+    ObjectId GetActorDb() {
         ObjectId id = ActorDb.load();
 
         if (id > 0) {
@@ -108,5 +149,17 @@ namespace JC
         RequestActorDb();
 
         return ActorDb.load();
+    }
+
+    ObjectId GetMarkerDb() {
+        ObjectId id = MarkerDb.load();
+
+        if (id > 0) {
+            return id;
+        }
+
+        RequestMarkerDb();
+
+        return MarkerDb.load();
     }
 }

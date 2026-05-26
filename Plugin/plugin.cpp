@@ -428,25 +428,31 @@ static bool InitializeLogger() {
 }
 
 static void OnSKSEMessage(SKSE::MessagingInterface::Message* msg) {
-    if (!msg || msg->type != SKSE::MessagingInterface::kPostLoad) {
+    if (!msg) {
         return;
     }
 
-    SKSE::GetMessagingInterface()->RegisterListener(JC_PLUGIN_NAME, [](SKSE::MessagingInterface::Message* msg) {
-        if (!msg || msg->type != jc::message_root_interface) {
-            return;
-        }
+    switch (msg->type) {
+        case SKSE::MessagingInterface::kPostLoad:
+            SKSE::GetMessagingInterface()->RegisterListener(JC_PLUGIN_NAME, [](SKSE::MessagingInterface::Message* msg) {
+                if (!msg || msg->type != jc::message_root_interface) {
+                    return;
+                }
 
-        JC::Load(jc::root_interface::from_void(msg->data));
-    });
+                JC::Load(jc::root_interface::from_void(msg->data));
+            });
+            break;
+
+        case SKSE::MessagingInterface::kDataLoaded:
+            UI::Register();
+            break;
+    }
 }
 
 SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     SKSE::Init(skse);
 
     InitializeLogger();
-
-    UI::Register();
 
     SKSE::GetMessagingInterface()->RegisterListener(OnSKSEMessage);
 
