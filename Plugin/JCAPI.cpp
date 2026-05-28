@@ -109,7 +109,7 @@ namespace JC {
         }
 
         auto dh = RE::TESDataHandler::GetSingleton();
-        auto quest = dh ? dh->LookupForm<RE::TESQuest>(0x0002E123, "SkyrimSlavery.esp") : nullptr;
+        auto quest = dh ? dh->LookupForm<RE::TESQuest>(0x00047627, "SkyrimSlavery.esp") : nullptr;
 
         if (!quest) {
             MarkerDbRequested.store(false);

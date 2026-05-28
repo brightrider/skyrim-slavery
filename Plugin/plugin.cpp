@@ -6,6 +6,7 @@
 
 #include "JCAPI.h"
 #include "UI.h"
+#include "utility.h"
 
 #pragma comment(lib, "Shlwapi.lib")
 
@@ -109,12 +110,7 @@ std::vector<RE::Actor*> OrderActorsByDisplayNames(RE::StaticFunctionTag*, std::v
     return result;
 }
 
-void LogActors(RE::StaticFunctionTag*, std::vector<RE::TESForm*> a_markers,
-               std::vector<RE::BSFixedString> a_markerNames, std::string a_filter = "", float a_radius = 0.0f) {
-    if (a_markers.size() != a_markerNames.size()) {
-        return;
-    }
-
+void LogActors(RE::StaticFunctionTag*, std::string a_filter = "", float a_radius = 0.0f) {
     const auto player = RE::PlayerCharacter::GetSingleton();
     if (!player) {
         return;
@@ -126,56 +122,9 @@ void LogActors(RE::StaticFunctionTag*, std::vector<RE::TESForm*> a_markers,
     }
 
     auto* BRSS_Actors = dh->LookupForm<RE::TESFaction>(0x5900, "SkyrimSlavery.esp");
-    auto* BRSS_PackageKeyword1 = dh->LookupForm<RE::BGSKeyword>(0xAA0F, "SkyrimSlavery.esp");
-    auto* BRSS_PackageKeyword2 = dh->LookupForm<RE::BGSKeyword>(0xAA10, "SkyrimSlavery.esp");
-    if (!BRSS_Actors || !BRSS_PackageKeyword1 || !BRSS_PackageKeyword2) {
+    if (!BRSS_Actors) {
         return;
     }
-
-    std::unordered_map<RE::TESForm*, const char*> markerNameByForm;
-    markerNameByForm.reserve(a_markers.size());
-    for (std::size_t i = 0; i < a_markers.size(); i++) {
-        RE::TESForm* marker = a_markers[i];
-        if (!marker) {
-            continue;
-        }
-
-        const char* name = a_markerNames[i].c_str();
-        markerNameByForm.emplace(marker, name);
-    }
-
-    auto _GetFormEditorID = reinterpret_cast<const char* (*)(std::uint32_t)>(
-        GetProcAddress(GetModuleHandleA("po3_Tweaks.dll"), "GetFormEditorID"));
-
-    auto GetName = [_GetFormEditorID, &markerNameByForm](RE::TESObjectREFR* ref) {
-        if (!ref || !ref->GetBaseObject()) {
-            return "unknown";
-        }
-
-        const char* desc = ref->GetDisplayFullName();
-        if (!desc || desc[0] == '\0' || strstr(desc, "not be visible")) {
-            desc = ref->GetBaseObject()->GetName();
-            if (!desc || desc[0] == '\0' || strstr(desc, "not be visible")) {
-                if (auto it = markerNameByForm.find(ref); it != markerNameByForm.end()) {
-                    desc = it->second;
-                } else {
-                    desc = nullptr;
-                }
-                if (!desc || desc[0] == '\0') {
-                    desc = ref->GetFormEditorID();
-                    if (!desc || desc[0] == '\0') {
-                        if (_GetFormEditorID) {
-                            desc = _GetFormEditorID(ref->GetBaseObject()->GetFormID());
-                        }
-                    }
-                }
-            }
-        }
-        if (!desc || desc[0] == '\0') {
-            desc = "unknown";
-        }
-        return desc;
-    };
 
     std::string line;
     line.reserve(512);
@@ -238,69 +187,7 @@ void LogActors(RE::StaticFunctionTag*, std::vector<RE::TESForm*> a_markers,
 
         line.append("] ");
 
-        int procedureCode = -1;
-        RE::ActorValueOwner* valueOwner = actor->AsActorValueOwner();
-        if (valueOwner) {
-            procedureCode = (int)valueOwner->GetBaseActorValue(RE::ActorValue::kVariable08);
-        }
-        const char* nameP1 = GetName(actor->GetLinkedRef(BRSS_PackageKeyword1));
-        const char* nameP2 = GetName(actor->GetLinkedRef(BRSS_PackageKeyword2));
-        switch (procedureCode) {
-            case 0:
-                line.append("Idle");
-                break;
-
-            case 1:
-                line.append("Traveling to ");
-                line.append(nameP1);
-                break;
-
-            case 2:
-                line.append("Following ");
-                line.append(nameP1);
-                break;
-
-            case 3:
-                line.append("Using Idle Marker ");
-                line.append(nameP1);
-                break;
-
-            case 4:
-                line.append("Using weapon on ");
-                line.append(nameP2);
-                break;
-
-            case 6:
-                line.append("Patrolling between ");
-                line.append(nameP1);
-                line.append(" and ");
-                line.append(nameP2);
-                break;
-
-            case 7:
-                line.append("Aiming at ");
-                line.append(nameP2);
-                break;
-
-            case 8:
-                line.append("Sitting at ");
-                line.append(nameP1);
-                break;
-
-            case 9:
-                line.append("Using weapon on ");
-                line.append(nameP2);
-                break;
-
-            case 10:
-                line.append("Using Idle Marker ");
-                line.append(nameP1);
-                break;
-
-            default:
-                line.append("No action assigned");
-                break;
-        }
+        Utility::CreateTaskDescription(actor, line);
 
         if (!a_filter.empty() && !StrStrIA(line.c_str(), a_filter.c_str())) {
             continue;
@@ -310,35 +197,32 @@ void LogActors(RE::StaticFunctionTag*, std::vector<RE::TESForm*> a_markers,
     }
 }
 
-void LogMarkers(RE::StaticFunctionTag*, std::vector<RE::TESForm*> a_markers,
-                std::vector<RE::BSFixedString> a_markerNames, std::string a_filter = "", float a_radius = 0.0f) {
-    if (a_markers.size() != a_markerNames.size()) {
-        return;
-    }
-
+void LogMarkers(RE::StaticFunctionTag*, std::string a_filter = "", float a_radius = 0.0f) {
     const auto player = RE::PlayerCharacter::GetSingleton();
     if (!player) {
         return;
     }
 
-    auto _GetFormEditorID = reinterpret_cast<const char* (*)(std::uint32_t)>(
-        GetProcAddress(GetModuleHandleA("po3_Tweaks.dll"), "GetFormEditorID"));
+    JC::ObjectId markerDb = JC::GetMarkerDb();
+    if (markerDb == 0) {
+        return;
+    }
 
     std::string line;
     line.reserve(120);
 
+    RE::TESForm* currentForm = JC::jFormMapNextKey(JC::Domain, markerDb, nullptr, nullptr);
     char buf[32];
-    for (std::size_t i = 0; i < a_markers.size(); i++) {
-        if (!a_markers[i]) {
-            continue;
-        }
-        RE::TESObjectREFR* marker = a_markers[i]->As<RE::TESObjectREFR>();
+    while (currentForm) {
+        RE::TESObjectREFR* marker = currentForm->As<RE::TESObjectREFR>();
         if (!marker || !marker->GetBaseObject()) {
+            currentForm = JC::jFormMapNextKey(JC::Domain, markerDb, currentForm, nullptr);
             continue;
         }
 
         float distanceSquared = marker->GetPosition().GetSquaredDistance(player->GetPosition());
         if (a_radius > 0.0f && distanceSquared > a_radius * a_radius) {
+            currentForm = JC::jFormMapNextKey(JC::Domain, markerDb, currentForm, nullptr);
             continue;
         }
         float distance;
@@ -350,7 +234,7 @@ void LogMarkers(RE::StaticFunctionTag*, std::vector<RE::TESForm*> a_markers,
 
         line.clear();
 
-        line.append(a_markerNames[i].c_str() ? a_markerNames[i].c_str() : "unknown");
+        line.append(JC::jFormMapGetStr(JC::Domain, markerDb, marker, "unknown").c_str());
         line.append("[");
 
         auto [ptr1, ec1] = std::to_chars(buf, buf + sizeof(buf), marker->GetFormID(), 16);
@@ -367,9 +251,7 @@ void LogMarkers(RE::StaticFunctionTag*, std::vector<RE::TESForm*> a_markers,
             if (!desc || desc[0] == '\0' || strstr(desc, "not be visible")) {
                 desc = marker->GetFormEditorID();
                 if (!desc || desc[0] == '\0') {
-                    if (_GetFormEditorID) {
-                        desc = _GetFormEditorID(marker->GetBaseObject()->GetFormID());
-                    }
+                    desc = Utility::GetFormEditorID(marker->GetBaseObject()->GetFormID());
                 }
             }
         }
@@ -398,10 +280,13 @@ void LogMarkers(RE::StaticFunctionTag*, std::vector<RE::TESForm*> a_markers,
         line.append("]");
 
         if (!a_filter.empty() && !StrStrIA(line.c_str(), a_filter.c_str())) {
+            currentForm = JC::jFormMapNextKey(JC::Domain, markerDb, currentForm, nullptr);
             continue;
         }
 
         RE::ConsoleLog::GetSingleton()->Print(line.c_str());
+
+        currentForm = JC::jFormMapNextKey(JC::Domain, markerDb, currentForm, nullptr);
     }
 }
 

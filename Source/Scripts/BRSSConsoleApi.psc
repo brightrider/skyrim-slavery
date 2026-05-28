@@ -11,7 +11,7 @@ String Function ActorAdd(String actorType, String name, String actorRace, Bool i
 EndFunction
 
 String Function ActorList(String filter, Float radius) global
-    BRSSUtil.LogActors(StorageUtil.FormListToArray(None, "BRSS_Markers"), StorageUtil.StringListToArray(None, "BRSS_MarkerNames"), filter, radius)
+    BRSSUtil.LogActors(filter, radius)
     Return ""
 EndFunction
 

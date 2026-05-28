@@ -24,7 +24,7 @@ namespace JC
     using JFormMapNextKey = RE::TESForm* (*)(void*, ObjectId, RE::TESForm*, RE::TESForm*);
     using JFormMapGetInt = ObjectId (*)(void*, ObjectId, RE::TESForm*, ObjectId);
     using JFormMapSetInt = void (*)(void*, ObjectId, RE::TESForm*, ObjectId);
-    using JFormMapGetStr = const char* (*)(void*, ObjectId, RE::TESForm*, const char*);
+    using JFormMapGetStr = RE::BSFixedString (*)(void*, ObjectId, RE::TESForm*, RE::BSFixedString);
     using JFormMapGetObj = ObjectId (*)(void*, ObjectId, RE::TESForm*, ObjectId);
     using JFormMapSetObj = void (*)(void*, ObjectId, RE::TESForm*, ObjectId);
     using JFormMapGetForm = RE::TESForm* (*)(void*, ObjectId, RE::TESForm*, RE::TESForm*);

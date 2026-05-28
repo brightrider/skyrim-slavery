@@ -111,7 +111,7 @@ EndFunction
 String Function GetList(String filter="", Float radius=0.0)
     AcquireLock()
 
-    BRSSUtil.LogMarkers(StorageUtil.FormListToArray(None, "BRSS_Markers"), StorageUtil.StringListToArray(None, "BRSS_MarkerNames"), filter, radius)
+    BRSSUtil.LogMarkers(filter, radius)
 
     ReleaseLock()
     Return ""

@@ -1,5 +1,8 @@
 #pragma once
 
+#pragma warning(push)
+#pragma warning(disable: 4099 4996 5054)
+
 #include <windows.h>
 #include <codecvt>
 #include <locale>
@@ -51,7 +54,7 @@ namespace SKSEMenuFramework {
         typedef void(__stdcall* HudElementCallback)();
 
         typedef void(__stdcall* EventCallback)(EventType eventType);
-        
+
         using RegisterEventFuction = int64_t (*)(EventCallback callback, float priority);
         using UnregisterEventFuction = void (*)(int64_t id);
 
@@ -11387,3 +11390,5 @@ namespace ImGuiMCPComponents {
         return clicked;
     }
 }
+
+#pragma warning(pop)
