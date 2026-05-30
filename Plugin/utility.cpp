@@ -124,4 +124,60 @@ namespace Utility {
                 break;
         }
     }
+
+    void CreateMarkerDescription(RE::TESObjectREFR* marker, std::string& buf, float distance) {
+        char tmp[32];
+
+        JC::ObjectId markerDb = JC::GetMarkerDb();
+        if (markerDb == 0) {
+            return;
+        }
+
+        buf.clear();
+
+        buf.append(JC::jFormMapGetStr(JC::Domain, markerDb, marker, "unknown").c_str());
+        buf.append("[");
+
+        auto [ptr1, ec1] = std::to_chars(tmp, tmp + sizeof(tmp), marker->GetFormID(), 16);
+        if (ec1 == std::errc{}) {
+            buf.append(tmp, ptr1);
+        } else {
+            buf.append("unknown");
+        }
+        buf.append(", ");
+
+        const char* desc = marker->GetDisplayFullName();
+        if (!desc || desc[0] == '\0' || strstr(desc, "not be visible")) {
+            desc = marker->GetBaseObject()->GetName();
+            if (!desc || desc[0] == '\0' || strstr(desc, "not be visible")) {
+                desc = marker->GetFormEditorID();
+                if (!desc || desc[0] == '\0') {
+                    desc = Utility::GetFormEditorID(marker->GetBaseObject()->GetFormID());
+                }
+            }
+        }
+        buf.append(desc ? desc : "unknown");
+        buf.append(", ");
+
+        const char* locStr = "unknown";
+        RE::BGSLocation* loc = marker->GetCurrentLocation();
+        if (loc) {
+            const char* locName = loc->GetName();
+            if (locName && locName[0] != '\0') {
+                locStr = locName;
+            }
+        }
+        buf.append(locStr);
+
+        buf.append("(");
+        auto [ptr2, ec2] = std::to_chars(tmp, tmp + sizeof(tmp), distance, std::chars_format::fixed, 2);
+        if (ec2 == std::errc{}) {
+            buf.append(tmp, ptr2);
+        } else {
+            buf.append("unknown");
+        }
+        buf.append(")");
+
+        buf.append("]");
+    }
 }

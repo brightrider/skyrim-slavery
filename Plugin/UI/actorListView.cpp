@@ -2,6 +2,7 @@
 
 #include "../SKSEMenuFramework.h"
 
+#include "common/builders.h"
 #include "common/filter.h"
 
 #include "../JCAPI.h"
@@ -41,18 +42,6 @@ static constexpr FilterFieldSpec kActorFilterFields[] = {
 
 static constexpr FilterSchema kActorFilterSchema{ kActorFilterFields, std::size(kActorFilterFields) };
 
-struct ActorTableRow {
-    char idHexBuf[16] = {};
-    std::string_view name = {};
-    std::string_view idHex = {};
-    std::string_view type = {};
-    std::string_view status = {};
-    std::string_view location = {};
-    std::string_view task = {};
-    bool isChild = false;
-    float distance = 0.0f;
-};
-
 static std::string_view ActorFilterRowText(const void* rowContext, std::uint8_t fieldId);
 static bool ActorFilterRowBool(const void* rowContext, std::uint8_t fieldId);
 static float ActorFilterRowNumber(const void* rowContext, std::uint8_t fieldId);
@@ -65,42 +54,6 @@ static const FilterRowAccess kActorFilterRowAccess{
 
 static const char* ActorTableRowTextOrEmpty(std::string_view text) {
     return text.empty() ? "" : text.data();
-}
-
-static void PopulateActorTableRow(RE::Actor* actor, RE::PlayerCharacter* player, std::string* taskBuf, ActorTableRow& out) {
-    out = {};
-
-    if (const char* displayName = actor->GetDisplayFullName()) {
-        out.name = displayName;
-    }
-
-    std::snprintf(out.idHexBuf, sizeof(out.idHexBuf), "%08X", actor->GetFormID());
-    out.idHex = out.idHexBuf;
-
-    if (const RE::TESBoundObject* base = actor->GetBaseObject()) {
-        if (const char* typeName = base->GetName()) {
-            out.type = typeName;
-        }
-    }
-
-    out.isChild = actor->IsChild();
-    out.status = actor->IsDead() ? "Dead" : "Alive";
-
-    if (const RE::BGSLocation* location = actor->GetCurrentLocation()) {
-        if (const char* locName = location->GetName()) {
-            out.location = locName;
-        }
-    } else {
-        out.location = "Unknown";
-    }
-
-    out.distance = actor->GetPosition().GetDistance(player->GetPosition());
-
-    if (taskBuf != nullptr) {
-        taskBuf->clear();
-        Utility::CreateTaskDescription(actor, *taskBuf);
-        out.task = *taskBuf;
-    }
 }
 
 static std::string_view ActorFilterRowText(const void* rowContext, std::uint8_t fieldId) {
@@ -175,11 +128,6 @@ void __stdcall UI::RenderActorListView() {
         return s;
     }();
 
-    const auto player = RE::PlayerCharacter::GetSingleton();
-    if (!player) {
-        return;
-    }
-
     JC::ObjectId actorDb = JC::GetActorDb();
     if (actorDb == 0) {
         ImGuiMCP::Text("No actor database found");
@@ -232,7 +180,7 @@ void __stdcall UI::RenderActorListView() {
 
             ActorTableRow row = {};
             const bool fillExpensiveFields = applyFilter && filterUsesExpensiveField;
-            PopulateActorTableRow(currentActor, player, fillExpensiveFields ? &taskBuffer : nullptr, row);
+            PopulateActorTableRow(currentActor, fillExpensiveFields ? &taskBuffer : nullptr, row);
 
             if (applyFilter && !FilterMatchesExpression(parseResult, &row, kActorFilterSchema, kActorFilterRowAccess)) {
                 currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, currentForm, nullptr);

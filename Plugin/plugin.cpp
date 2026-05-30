@@ -212,7 +212,6 @@ void LogMarkers(RE::StaticFunctionTag*, std::string a_filter = "", float a_radiu
     line.reserve(120);
 
     RE::TESForm* currentForm = JC::jFormMapNextKey(JC::Domain, markerDb, nullptr, nullptr);
-    char buf[32];
     while (currentForm) {
         RE::TESObjectREFR* marker = currentForm->As<RE::TESObjectREFR>();
         if (!marker || !marker->GetBaseObject()) {
@@ -232,52 +231,7 @@ void LogMarkers(RE::StaticFunctionTag*, std::string a_filter = "", float a_radiu
             distance = sqrt(distanceSquared);
         }
 
-        line.clear();
-
-        line.append(JC::jFormMapGetStr(JC::Domain, markerDb, marker, "unknown").c_str());
-        line.append("[");
-
-        auto [ptr1, ec1] = std::to_chars(buf, buf + sizeof(buf), marker->GetFormID(), 16);
-        if (ec1 == std::errc{}) {
-            line.append(buf, ptr1);
-        } else {
-            line.append("unknown");
-        }
-        line.append(", ");
-
-        const char* desc = marker->GetDisplayFullName();
-        if (!desc || desc[0] == '\0' || strstr(desc, "not be visible")) {
-            desc = marker->GetBaseObject()->GetName();
-            if (!desc || desc[0] == '\0' || strstr(desc, "not be visible")) {
-                desc = marker->GetFormEditorID();
-                if (!desc || desc[0] == '\0') {
-                    desc = Utility::GetFormEditorID(marker->GetBaseObject()->GetFormID());
-                }
-            }
-        }
-        line.append(desc ? desc : "unknown");
-        line.append(", ");
-
-        const char* locStr = "unknown";
-        RE::BGSLocation* loc = marker->GetCurrentLocation();
-        if (loc) {
-            const char* locName = loc->GetName();
-            if (locName && locName[0] != '\0') {
-                locStr = locName;
-            }
-        }
-        line.append(locStr);
-
-        line.append("(");
-        auto [ptr2, ec2] = std::to_chars(buf, buf + sizeof(buf), distance, std::chars_format::fixed, 2);
-        if (ec2 == std::errc{}) {
-            line.append(buf, ptr2);
-        } else {
-            line.append("unknown");
-        }
-        line.append(")");
-
-        line.append("]");
+        Utility::CreateMarkerDescription(marker, line, distance);
 
         if (!a_filter.empty() && !StrStrIA(line.c_str(), a_filter.c_str())) {
             currentForm = JC::jFormMapNextKey(JC::Domain, markerDb, currentForm, nullptr);

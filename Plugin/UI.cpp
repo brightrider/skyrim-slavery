@@ -3,6 +3,7 @@
 #include "SKSEMenuFramework.h"
 
 #include "UI/actorListView.h"
+#include "UI/markerListView.h"
 
 void UI::Register() {
     if (!SKSEMenuFramework::IsInstalled()) {
@@ -11,4 +12,5 @@ void UI::Register() {
 
     SKSEMenuFramework::SetSection("Skyrim Slavery");
     SKSEMenuFramework::AddSectionItem("Actor list", RenderActorListView);
+    SKSEMenuFramework::AddSectionItem("Marker list", RenderMarkerListView);
 }

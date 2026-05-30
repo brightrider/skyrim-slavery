@@ -5,4 +5,5 @@ namespace Utility {
     const char* GetFormEditorID(std::uint32_t formId);
 
     void CreateTaskDescription(RE::Actor* actor, std::string& buf);
+    void CreateMarkerDescription(RE::TESObjectREFR* marker, std::string& buf, float distance);
 }
