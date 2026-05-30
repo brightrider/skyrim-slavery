@@ -1,10 +1,20 @@
 #include "filter.h"
 
+static bool FilterMatchTextOp(FilterOp op, std::string_view fieldText, std::string_view needle);
+static bool FilterMatchFloatOp(FilterOp op, float value, double threshold);
+
 static bool FilterCharEqualsIgnoreCase(char a, char b) {
     return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
 }
 
-bool FilterStringEqualsIgnoreCase(std::string_view word, const char* literal) {
+static bool FilterSchemaValid(const FilterSchema& schema) {
+    return schema.fieldCount == 0 || schema.fields != nullptr;
+}
+
+static bool FilterStringEqualsIgnoreCase(std::string_view word, const char* literal) {
+    if (literal == nullptr) {
+        return false;
+    }
     const std::size_t literalLen = std::strlen(literal);
     if (word.size() != literalLen) {
         return false;
@@ -15,6 +25,36 @@ bool FilterStringEqualsIgnoreCase(std::string_view word, const char* literal) {
         }
     }
     return true;
+}
+
+static const FilterFieldSpec* FilterFindFieldSpec(std::string_view ident, const FilterSchema& schema) {
+    if (!FilterSchemaValid(schema)) {
+        return nullptr;
+    }
+    for (std::size_t s = 0; s < schema.fieldCount; ++s) {
+        const FilterFieldSpec& spec = schema.fields[s];
+        if (spec.aliases == nullptr) {
+            continue;
+        }
+        for (std::size_t a = 0; a < spec.aliasCount; ++a) {
+            if (FilterStringEqualsIgnoreCase(ident, spec.aliases[a])) {
+                return &spec;
+            }
+        }
+    }
+    return nullptr;
+}
+
+static const FilterFieldSpec* FilterFindFieldSpecById(std::uint8_t fieldId, const FilterSchema& schema) {
+    if (!FilterSchemaValid(schema)) {
+        return nullptr;
+    }
+    for (std::size_t s = 0; s < schema.fieldCount; ++s) {
+        if (schema.fields[s].fieldId == fieldId) {
+            return &schema.fields[s];
+        }
+    }
+    return nullptr;
 }
 
 static bool FilterIsIdentifierStart(char c) {
@@ -184,7 +224,7 @@ bool FilterTokenize(const char* input, FilterTokenizeResult& result) {
     return true;
 }
 
-bool FilterTryParseDouble(std::string_view sv, double& out) {
+static bool FilterTryParseDouble(std::string_view sv, double& out) {
     if (sv.empty()) {
         return false;
     }
@@ -208,14 +248,15 @@ bool FilterTryParseDouble(std::string_view sv, double& out) {
     return true;
 }
 
-void FilterSetParseError(FilterParseResult& result, std::size_t tokenIndex, const char* message) {
+static void FilterSetParseError(FilterParseResult& result, std::size_t tokenIndex, const char* message) {
     result.ok = false;
+    result.partial = false;
     result.hasExpression = false;
     result.andGroupCount = 0;
     std::snprintf(result.error, sizeof(result.error), "%s at token %zu", message, tokenIndex + 1);
 }
 
-bool FilterIsOpKeyword(std::string_view ident, FilterOp& outOp) {
+static bool FilterIsOpKeyword(std::string_view ident, FilterOp& outOp) {
     if (FilterStringEqualsIgnoreCase(ident, "contains") || FilterStringEqualsIgnoreCase(ident, "ct")) {
         outOp = FilterOp::Contains;
         return true;
@@ -231,12 +272,157 @@ bool FilterIsOpKeyword(std::string_view ident, FilterOp& outOp) {
     return false;
 }
 
+static bool FilterIsNumericComparisonOp(FilterOp op) {
+    return op == FilterOp::Less || op == FilterOp::Greater || op == FilterOp::LessEqual || op == FilterOp::GreaterEqual;
+}
+
+static bool FilterIsTextComparisonOp(FilterOp op) {
+    return op == FilterOp::Equals || op == FilterOp::Contains || op == FilterOp::StartsWith || op == FilterOp::EndsWith;
+}
+
+static bool FilterParseComparisonOperator(const FilterTokenizeResult& tokens, std::size_t& ioIndex, FilterOp& outOp,
+    FilterParseResult& err) {
+    if (ioIndex >= tokens.count) {
+        FilterSetParseError(err, ioIndex, "Expected operator");
+        return false;
+    }
+
+    const FilterToken& opTok = tokens.tokens[ioIndex];
+    if (opTok.kind == FilterTokenKind::Equals) {
+        outOp = FilterOp::Equals;
+        ++ioIndex;
+        return true;
+    }
+    if (opTok.kind == FilterTokenKind::Less) {
+        outOp = FilterOp::Less;
+        ++ioIndex;
+        return true;
+    }
+    if (opTok.kind == FilterTokenKind::Greater) {
+        outOp = FilterOp::Greater;
+        ++ioIndex;
+        return true;
+    }
+    if (opTok.kind == FilterTokenKind::LessEqual) {
+        outOp = FilterOp::LessEqual;
+        ++ioIndex;
+        return true;
+    }
+    if (opTok.kind == FilterTokenKind::GreaterEqual) {
+        outOp = FilterOp::GreaterEqual;
+        ++ioIndex;
+        return true;
+    }
+    if (opTok.kind == FilterTokenKind::Identifier) {
+        if (!FilterIsOpKeyword(opTok.lexeme, outOp)) {
+            FilterSetParseError(err, ioIndex, "Unknown operator");
+            return false;
+        }
+        ++ioIndex;
+        return true;
+    }
+
+    FilterSetParseError(err, ioIndex, "Expected operator");
+    return false;
+}
+
+static bool FilterParsePredicateWithSchema(const FilterTokenizeResult& tokens, std::size_t startIndex, FilterPredicate& outPred,
+    std::size_t& outNextIndex, FilterParseResult& err, const FilterSchema& schema) {
+    outPred = {};
+
+    std::size_t i = startIndex;
+    bool negated = false;
+    if (i < tokens.count && tokens.tokens[i].kind == FilterTokenKind::Not) {
+        negated = true;
+        ++i;
+        if (i >= tokens.count) {
+            FilterSetParseError(err, i, "Expected identifier after not");
+            return false;
+        }
+    }
+
+    if (i >= tokens.count || tokens.tokens[i].kind != FilterTokenKind::Identifier) {
+        FilterSetParseError(err, i, "Expected identifier");
+        return false;
+    }
+
+    const FilterFieldSpec* const fieldSpec = FilterFindFieldSpec(tokens.tokens[i].lexeme, schema);
+    if (fieldSpec == nullptr) {
+        FilterSetParseError(err, i, "Unknown field");
+        return false;
+    }
+    ++i;
+
+    if (fieldSpec->kind == FilterFieldKind::Bool) {
+        outPred.field = fieldSpec->fieldId;
+        outPred.op = FilterOp::IsTrue;
+        outPred.negated = negated;
+        outPred.valueKind = FilterValueKind::None;
+        outNextIndex = i;
+        return true;
+    }
+
+    FilterOp op = FilterOp::Equals;
+    if (!FilterParseComparisonOperator(tokens, i, op, err)) {
+        return false;
+    }
+
+    if (i >= tokens.count) {
+        FilterSetParseError(err, i, "Expected value");
+        return false;
+    }
+
+    if (fieldSpec->kind == FilterFieldKind::Number) {
+        if (!FilterIsNumericComparisonOp(op)) {
+            FilterSetParseError(err, i - 1, "Invalid operator for number field");
+            return false;
+        }
+        if (tokens.tokens[i].kind != FilterTokenKind::Number) {
+            FilterSetParseError(err, i, "Expected number");
+            return false;
+        }
+        double value = 0.0;
+        if (!FilterTryParseDouble(tokens.tokens[i].lexeme, value)) {
+            FilterSetParseError(err, i, "Invalid number");
+            return false;
+        }
+        ++i;
+
+        outPred.field = fieldSpec->fieldId;
+        outPred.op = op;
+        outPred.negated = negated;
+        outPred.valueKind = FilterValueKind::Number;
+        outPred.numberValue = value;
+        outNextIndex = i;
+        return true;
+    }
+
+    if (!FilterIsTextComparisonOp(op)) {
+        FilterSetParseError(err, i - 1, "Invalid operator for text field");
+        return false;
+    }
+    if (tokens.tokens[i].kind != FilterTokenKind::Identifier && tokens.tokens[i].kind != FilterTokenKind::String) {
+        FilterSetParseError(err, i, "Expected text");
+        return false;
+    }
+    const std::string_view valueLex = tokens.tokens[i].lexeme;
+    ++i;
+
+    outPred.field = fieldSpec->fieldId;
+    outPred.op = op;
+    outPred.negated = negated;
+    outPred.valueKind = FilterValueKind::Text;
+    outPred.textValue = valueLex;
+    outNextIndex = i;
+    return true;
+}
+
 static bool FilterParseAndGroup(const FilterTokenizeResult& tokens, std::size_t& ioIndex, FilterAndGroup& group,
-    FilterParseResult& err, FilterParsePredicateFn parsePredicate) {
+    FilterParseResult& err, const FilterSchema& schema) {
     group.predicateCount = 0;
 
     FilterPredicate pred = {};
-    if (!parsePredicate(tokens, ioIndex, pred, ioIndex, err)) {
+    if (!FilterParsePredicateWithSchema(tokens, ioIndex, pred, ioIndex, err, schema)) {
         return false;
     }
     if (group.predicateCount >= std::size(group.predicates)) {
@@ -247,7 +433,7 @@ static bool FilterParseAndGroup(const FilterTokenizeResult& tokens, std::size_t&
 
     while (ioIndex < tokens.count && tokens.tokens[ioIndex].kind == FilterTokenKind::And) {
         ++ioIndex;
-        if (!parsePredicate(tokens, ioIndex, pred, ioIndex, err)) {
+        if (!FilterParsePredicateWithSchema(tokens, ioIndex, pred, ioIndex, err, schema)) {
             return false;
         }
         if (group.predicateCount >= std::size(group.predicates)) {
@@ -261,11 +447,11 @@ static bool FilterParseAndGroup(const FilterTokenizeResult& tokens, std::size_t&
 }
 
 static bool FilterParseAndGroupPartial(const FilterTokenizeResult& tokens, std::size_t& ioIndex, FilterAndGroup& group,
-    FilterParseResult& err, FilterParsePredicateFn parsePredicate) {
+    FilterParseResult& err, const FilterSchema& schema) {
     group.predicateCount = 0;
 
     FilterPredicate pred = {};
-    if (!parsePredicate(tokens, ioIndex, pred, ioIndex, err)) {
+    if (!FilterParsePredicateWithSchema(tokens, ioIndex, pred, ioIndex, err, schema)) {
         return false;
     }
     if (group.predicateCount >= std::size(group.predicates)) {
@@ -277,7 +463,7 @@ static bool FilterParseAndGroupPartial(const FilterTokenizeResult& tokens, std::
     while (ioIndex < tokens.count && tokens.tokens[ioIndex].kind == FilterTokenKind::And) {
         const std::size_t andTokenIndex = ioIndex;
         ++ioIndex;
-        if (!parsePredicate(tokens, ioIndex, pred, ioIndex, err)) {
+        if (!FilterParsePredicateWithSchema(tokens, ioIndex, pred, ioIndex, err, schema)) {
             ioIndex = andTokenIndex;
             return true;
         }
@@ -291,8 +477,7 @@ static bool FilterParseAndGroupPartial(const FilterTokenizeResult& tokens, std::
     return true;
 }
 
-static bool FilterParseExpressionStrict(const FilterTokenizeResult& tokens, FilterParseResult& out,
-    FilterParsePredicateFn parsePredicate) {
+static bool FilterParseExpressionStrict(const FilterTokenizeResult& tokens, FilterParseResult& out, const FilterSchema& schema) {
     out.ok = true;
     out.partial = false;
     out.hasExpression = false;
@@ -310,7 +495,7 @@ static bool FilterParseExpressionStrict(const FilterTokenizeResult& tokens, Filt
     }
 
     std::size_t i = 0;
-    if (!FilterParseAndGroup(tokens, i, out.andGroups[0], out, parsePredicate)) {
+    if (!FilterParseAndGroup(tokens, i, out.andGroups[0], out, schema)) {
         return false;
     }
     out.andGroupCount = 1;
@@ -325,7 +510,7 @@ static bool FilterParseExpressionStrict(const FilterTokenizeResult& tokens, Filt
             FilterSetParseError(out, i, "Too many or-groups");
             return false;
         }
-        if (!FilterParseAndGroup(tokens, i, out.andGroups[out.andGroupCount], out, parsePredicate)) {
+        if (!FilterParseAndGroup(tokens, i, out.andGroups[out.andGroupCount], out, schema)) {
             return false;
         }
         ++out.andGroupCount;
@@ -335,8 +520,7 @@ static bool FilterParseExpressionStrict(const FilterTokenizeResult& tokens, Filt
     return true;
 }
 
-static bool FilterParseExpressionPartial(const FilterTokenizeResult& tokens, FilterParseResult& out,
-    FilterParsePredicateFn parsePredicate) {
+static bool FilterParseExpressionPartial(const FilterTokenizeResult& tokens, FilterParseResult& out, const FilterSchema& schema) {
     out.ok = false;
     out.partial = true;
     out.hasExpression = false;
@@ -351,7 +535,7 @@ static bool FilterParseExpressionPartial(const FilterTokenizeResult& tokens, Fil
     std::size_t i = 0;
 
     FilterAndGroup firstGroup = {};
-    if (!FilterParseAndGroupPartial(tokens, i, firstGroup, scratch, parsePredicate) || firstGroup.predicateCount == 0) {
+    if (!FilterParseAndGroupPartial(tokens, i, firstGroup, scratch, schema) || firstGroup.predicateCount == 0) {
         return false;
     }
     out.andGroups[0] = firstGroup;
@@ -366,7 +550,7 @@ static bool FilterParseExpressionPartial(const FilterTokenizeResult& tokens, Fil
         ++i;
 
         FilterAndGroup nextGroup = {};
-        if (!FilterParseAndGroupPartial(tokens, i, nextGroup, scratch, parsePredicate) || nextGroup.predicateCount == 0) {
+        if (!FilterParseAndGroupPartial(tokens, i, nextGroup, scratch, schema) || nextGroup.predicateCount == 0) {
             i = orTokenIndex;
             break;
         }
@@ -380,13 +564,22 @@ static bool FilterParseExpressionPartial(const FilterTokenizeResult& tokens, Fil
     return true;
 }
 
-bool FilterParseExpression(const FilterTokenizeResult& tokens, FilterParseResult& out, FilterParsePredicateFn parsePredicate) {
-    if (FilterParseExpressionStrict(tokens, out, parsePredicate)) {
+bool FilterParseExpression(const FilterTokenizeResult& tokens, FilterParseResult& out, const FilterSchema& schema) {
+    if (!FilterSchemaValid(schema)) {
+        out.ok = false;
+        out.partial = false;
+        out.hasExpression = false;
+        out.andGroupCount = 0;
+        std::snprintf(out.error, sizeof(out.error), "Invalid filter schema");
+        return false;
+    }
+
+    if (FilterParseExpressionStrict(tokens, out, schema)) {
         return true;
     }
 
     const FilterParseResult strictFailure = out;
-    if (FilterParseExpressionPartial(tokens, out, parsePredicate)) {
+    if (FilterParseExpressionPartial(tokens, out, schema)) {
         if (strictFailure.error[0] != '\0') {
             std::snprintf(out.error, sizeof(out.error), "%s", strictFailure.error);
         } else {
@@ -400,16 +593,75 @@ bool FilterParseExpression(const FilterTokenizeResult& tokens, FilterParseResult
     return false;
 }
 
-bool FilterExpressionUsesField(const FilterParseResult& expr, std::uint8_t field) {
-    if (!expr.hasExpression) {
+bool FilterExpressionUsesExpensiveField(const FilterParseResult& expr, const FilterSchema& schema) {
+    if (!expr.hasExpression || !FilterSchemaValid(schema)) {
         return false;
     }
     for (std::size_t g = 0; g < expr.andGroupCount; ++g) {
         const FilterAndGroup& group = expr.andGroups[g];
         for (std::size_t p = 0; p < group.predicateCount; ++p) {
-            if (group.predicates[p].field == field) {
+            const FilterFieldSpec* const fieldSpec = FilterFindFieldSpecById(group.predicates[p].field, schema);
+            if (fieldSpec != nullptr && fieldSpec->expensive) {
                 return true;
             }
+        }
+    }
+    return false;
+}
+
+static bool FilterMatchPredicateWithSchema(const FilterPredicate& pred, const void* rowContext, const FilterSchema& schema,
+    const FilterRowAccess& access) {
+    if (access.getText == nullptr || access.getBool == nullptr || access.getNumber == nullptr) {
+        return pred.negated;
+    }
+
+    const FilterFieldSpec* const fieldSpec = FilterFindFieldSpecById(pred.field, schema);
+    if (fieldSpec == nullptr) {
+        return pred.negated;
+    }
+
+    bool matched = false;
+
+    switch (fieldSpec->kind) {
+    case FilterFieldKind::Bool:
+        if (pred.op == FilterOp::IsTrue) {
+            matched = access.getBool(rowContext, pred.field);
+        }
+        break;
+    case FilterFieldKind::Number:
+        matched = FilterMatchFloatOp(pred.op, access.getNumber(rowContext, pred.field), pred.numberValue);
+        break;
+    case FilterFieldKind::Text:
+        if (pred.valueKind == FilterValueKind::Text) {
+            matched = FilterMatchTextOp(pred.op, access.getText(rowContext, pred.field), pred.textValue);
+        }
+        break;
+    }
+
+    return pred.negated ? !matched : matched;
+}
+
+static bool FilterMatchesAndGroup(const FilterAndGroup& group, const void* rowContext, const FilterSchema& schema,
+    const FilterRowAccess& access) {
+    for (std::size_t i = 0; i < group.predicateCount; ++i) {
+        if (!FilterMatchPredicateWithSchema(group.predicates[i], rowContext, schema, access)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool FilterMatchesExpression(const FilterParseResult& expr, const void* rowContext, const FilterSchema& schema,
+    const FilterRowAccess& access) {
+    if (!expr.hasExpression) {
+        return true;
+    }
+    if (!FilterSchemaValid(schema)) {
+        return false;
+    }
+    for (std::size_t g = 0; g < expr.andGroupCount; ++g) {
+        if (FilterMatchesAndGroup(expr.andGroups[g], rowContext, schema, access)) {
+            return true;
         }
     }
     return false;
@@ -460,7 +712,7 @@ static bool FilterContainsIgnoreCase(std::string_view text, std::string_view nee
     return false;
 }
 
-bool FilterMatchTextOp(FilterOp op, std::string_view fieldText, std::string_view needle) {
+static bool FilterMatchTextOp(FilterOp op, std::string_view fieldText, std::string_view needle) {
     switch (op) {
     case FilterOp::Equals:
         return FilterEqualsIgnoreCase(fieldText, needle);
@@ -475,7 +727,7 @@ bool FilterMatchTextOp(FilterOp op, std::string_view fieldText, std::string_view
     }
 }
 
-bool FilterMatchFloatOp(FilterOp op, float value, double threshold) {
+static bool FilterMatchFloatOp(FilterOp op, float value, double threshold) {
     switch (op) {
     case FilterOp::Less:
         return value < threshold;

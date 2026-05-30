@@ -1,5 +1,24 @@
 #pragma once
 
+enum class FilterFieldKind : std::uint8_t {
+    Text,
+    Bool,
+    Number,
+};
+
+struct FilterFieldSpec {
+    std::uint8_t fieldId = 0;
+    FilterFieldKind kind = FilterFieldKind::Text;
+    const char* const* aliases = nullptr;
+    std::size_t aliasCount = 0;
+    bool expensive = false;
+};
+
+struct FilterSchema {
+    const FilterFieldSpec* fields = nullptr;
+    std::size_t fieldCount = 0;
+};
+
 enum class FilterTokenKind : std::uint8_t {
     Identifier,
     String,
@@ -14,18 +33,6 @@ enum class FilterTokenKind : std::uint8_t {
     Not,
 };
 
-enum class FilterOp : std::uint8_t {
-    Equals,
-    Contains,
-    StartsWith,
-    EndsWith,
-    Less,
-    Greater,
-    LessEqual,
-    GreaterEqual,
-    IsTrue,
-};
-
 struct FilterToken {
     FilterTokenKind kind;
     std::string_view lexeme;
@@ -36,6 +43,18 @@ struct FilterTokenizeResult {
     char error[128] = {};
     std::size_t count = 0;
     FilterToken tokens[64] = {};
+};
+
+enum class FilterOp : std::uint8_t {
+    Equals,
+    Contains,
+    StartsWith,
+    EndsWith,
+    Less,
+    Greater,
+    LessEqual,
+    GreaterEqual,
+    IsTrue,
 };
 
 enum class FilterValueKind : std::uint8_t {
@@ -71,19 +90,18 @@ struct FilterParseResult {
     std::size_t andGroupCount = 0;
 };
 
-using FilterParsePredicateFn = bool (*)(const FilterTokenizeResult& tokens, std::size_t startIndex,
-    FilterPredicate& outPred, std::size_t& outNextIndex, FilterParseResult& err);
+using FilterRowTextFn = std::string_view (*)(const void* rowContext, std::uint8_t fieldId);
+using FilterRowBoolFn = bool (*)(const void* rowContext, std::uint8_t fieldId);
+using FilterRowNumberFn = float (*)(const void* rowContext, std::uint8_t fieldId);
+
+struct FilterRowAccess {
+    FilterRowTextFn getText = nullptr;
+    FilterRowBoolFn getBool = nullptr;
+    FilterRowNumberFn getNumber = nullptr;
+};
 
 bool FilterTokenize(const char* input, FilterTokenizeResult& result);
-bool FilterParseExpression(const FilterTokenizeResult& tokens, FilterParseResult& out,
-    FilterParsePredicateFn parsePredicate);
-bool FilterExpressionUsesField(const FilterParseResult& expr, std::uint8_t field);
-
-bool FilterIsOpKeyword(std::string_view ident, FilterOp& outOp);
-bool FilterMatchTextOp(FilterOp op, std::string_view fieldText, std::string_view needle);
-bool FilterMatchFloatOp(FilterOp op, float value, double threshold);
-
-bool FilterStringEqualsIgnoreCase(std::string_view word, const char* literal);
-bool FilterTryParseDouble(std::string_view sv, double& out);
-
-void FilterSetParseError(FilterParseResult& result, std::size_t tokenIndex, const char* message);
+bool FilterParseExpression(const FilterTokenizeResult& tokens, FilterParseResult& out, const FilterSchema& schema);
+bool FilterExpressionUsesExpensiveField(const FilterParseResult& expr, const FilterSchema& schema);
+bool FilterMatchesExpression(const FilterParseResult& expr, const void* rowContext, const FilterSchema& schema,
+    const FilterRowAccess& access);

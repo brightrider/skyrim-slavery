@@ -7,7 +7,7 @@
 #include "../JCAPI.h"
 #include "../utility.h"
 
-enum class FilterField : std::uint8_t {
+enum class ActorFilterField : std::uint8_t {
     Unknown = 0,
     Name,
     Id,
@@ -19,157 +19,30 @@ enum class FilterField : std::uint8_t {
     Task,
 };
 
-static FilterField FilterParseField(std::string_view ident) {
-    if (FilterStringEqualsIgnoreCase(ident, "name") || FilterStringEqualsIgnoreCase(ident, "na")) {
-        return FilterField::Name;
-    }
-    if (FilterStringEqualsIgnoreCase(ident, "id")) {
-        return FilterField::Id;
-    }
-    if (FilterStringEqualsIgnoreCase(ident, "type") || FilterStringEqualsIgnoreCase(ident, "ty")) {
-        return FilterField::Type;
-    }
-    if (FilterStringEqualsIgnoreCase(ident, "child") || FilterStringEqualsIgnoreCase(ident, "ch")) {
-        return FilterField::Child;
-    }
-    if (FilterStringEqualsIgnoreCase(ident, "status") || FilterStringEqualsIgnoreCase(ident, "st")) {
-        return FilterField::Status;
-    }
-    if (FilterStringEqualsIgnoreCase(ident, "location") || FilterStringEqualsIgnoreCase(ident, "lo")) {
-        return FilterField::Location;
-    }
-    if (FilterStringEqualsIgnoreCase(ident, "distance") || FilterStringEqualsIgnoreCase(ident, "di")) {
-        return FilterField::Distance;
-    }
-    if (FilterStringEqualsIgnoreCase(ident, "task") || FilterStringEqualsIgnoreCase(ident, "ta")) {
-        return FilterField::Task;
-    }
-    return FilterField::Unknown;
-}
+static constexpr const char* kNameAliases[] = { "name", "na" };
+static constexpr const char* kIdAliases[] = { "id" };
+static constexpr const char* kTypeAliases[] = { "type", "ty" };
+static constexpr const char* kChildAliases[] = { "child", "ch" };
+static constexpr const char* kStatusAliases[] = { "status", "st" };
+static constexpr const char* kLocationAliases[] = { "location", "lo" };
+static constexpr const char* kDistanceAliases[] = { "distance", "di" };
+static constexpr const char* kTaskAliases[] = { "task", "ta" };
 
-static bool FilterParsePredicateAt(const FilterTokenizeResult& tokens, std::size_t startIndex, FilterPredicate& outPred,
-    std::size_t& outNextIndex, FilterParseResult& err) {
-    outPred = {};
+static constexpr FilterFieldSpec kActorFilterFields[] = {
+    { static_cast<std::uint8_t>(ActorFilterField::Name), FilterFieldKind::Text, kNameAliases, std::size(kNameAliases), false },
+    { static_cast<std::uint8_t>(ActorFilterField::Id), FilterFieldKind::Text, kIdAliases, std::size(kIdAliases), false },
+    { static_cast<std::uint8_t>(ActorFilterField::Type), FilterFieldKind::Text, kTypeAliases, std::size(kTypeAliases), false },
+    { static_cast<std::uint8_t>(ActorFilterField::Child), FilterFieldKind::Bool, kChildAliases, std::size(kChildAliases), false },
+    { static_cast<std::uint8_t>(ActorFilterField::Status), FilterFieldKind::Text, kStatusAliases, std::size(kStatusAliases), false },
+    { static_cast<std::uint8_t>(ActorFilterField::Location), FilterFieldKind::Text, kLocationAliases, std::size(kLocationAliases), false },
+    { static_cast<std::uint8_t>(ActorFilterField::Distance), FilterFieldKind::Number, kDistanceAliases, std::size(kDistanceAliases), false },
+    { static_cast<std::uint8_t>(ActorFilterField::Task), FilterFieldKind::Text, kTaskAliases, std::size(kTaskAliases), true },
+};
 
-    std::size_t i = startIndex;
-    bool negated = false;
-    if (i < tokens.count && tokens.tokens[i].kind == FilterTokenKind::Not) {
-        negated = true;
-        ++i;
-        if (i >= tokens.count) {
-            FilterSetParseError(err, i, "Expected identifier after not");
-            return false;
-        }
-    }
-
-    if (tokens.tokens[i].kind != FilterTokenKind::Identifier) {
-        FilterSetParseError(err, i, "Expected identifier");
-        return false;
-    }
-
-    const FilterField field = FilterParseField(tokens.tokens[i].lexeme);
-    if (field == FilterField::Unknown) {
-        FilterSetParseError(err, i, "Unknown field");
-        return false;
-    }
-    ++i;
-
-    if (field == FilterField::Child) {
-        outPred.field = static_cast<std::uint8_t>(FilterField::Child);
-        outPred.op = FilterOp::IsTrue;
-        outPred.negated = negated;
-        outPred.valueKind = FilterValueKind::None;
-        outNextIndex = i;
-        return true;
-    }
-
-    if (i >= tokens.count) {
-        FilterSetParseError(err, i, "Expected operator");
-        return false;
-    }
-
-    FilterOp op = FilterOp::Equals;
-    const FilterToken& opTok = tokens.tokens[i];
-    if (opTok.kind == FilterTokenKind::Equals) {
-        op = FilterOp::Equals;
-        ++i;
-    } else if (opTok.kind == FilterTokenKind::Less) {
-        op = FilterOp::Less;
-        ++i;
-    } else if (opTok.kind == FilterTokenKind::Greater) {
-        op = FilterOp::Greater;
-        ++i;
-    } else if (opTok.kind == FilterTokenKind::LessEqual) {
-        op = FilterOp::LessEqual;
-        ++i;
-    } else if (opTok.kind == FilterTokenKind::GreaterEqual) {
-        op = FilterOp::GreaterEqual;
-        ++i;
-    } else if (opTok.kind == FilterTokenKind::Identifier) {
-        if (!FilterIsOpKeyword(opTok.lexeme, op)) {
-            FilterSetParseError(err, i, "Unknown operator");
-            return false;
-        }
-        ++i;
-    } else {
-        FilterSetParseError(err, i, "Expected operator");
-        return false;
-    }
-
-    if (i >= tokens.count) {
-        FilterSetParseError(err, i, "Expected value");
-        return false;
-    }
-
-    if (field == FilterField::Distance) {
-        const bool numericOp =
-            (op == FilterOp::Less || op == FilterOp::Greater || op == FilterOp::LessEqual || op == FilterOp::GreaterEqual);
-        if (!numericOp) {
-            FilterSetParseError(err, i - 1, "Invalid operator for distance");
-            return false;
-        }
-        if (tokens.tokens[i].kind != FilterTokenKind::Number) {
-            FilterSetParseError(err, i, "Expected number");
-            return false;
-        }
-        double value = 0.0;
-        if (!FilterTryParseDouble(tokens.tokens[i].lexeme, value)) {
-            FilterSetParseError(err, i, "Invalid number");
-            return false;
-        }
-        ++i;
-
-        outPred.field = static_cast<std::uint8_t>(field);
-        outPred.op = op;
-        outPred.negated = negated;
-        outPred.valueKind = FilterValueKind::Number;
-        outPred.numberValue = value;
-        outNextIndex = i;
-        return true;
-    }
-
-    const bool textOp = (op == FilterOp::Equals || op == FilterOp::Contains || op == FilterOp::StartsWith || op == FilterOp::EndsWith);
-    if (!textOp) {
-        FilterSetParseError(err, i - 1, "Invalid operator for text field");
-        return false;
-    }
-    if (tokens.tokens[i].kind != FilterTokenKind::Identifier && tokens.tokens[i].kind != FilterTokenKind::String) {
-        FilterSetParseError(err, i, "Expected text");
-        return false;
-    }
-    const std::string_view valueLex = tokens.tokens[i].lexeme;
-    ++i;
-
-    outPred.field = static_cast<std::uint8_t>(field);
-    outPred.op = op;
-    outPred.negated = negated;
-    outPred.valueKind = FilterValueKind::Text;
-    outPred.textValue = valueLex;
-    outNextIndex = i;
-    return true;
-}
+static constexpr FilterSchema kActorFilterSchema{ kActorFilterFields, std::size(kActorFilterFields) };
 
 struct ActorTableRow {
+    char idHexBuf[16] = {};
     std::string_view name = {};
     std::string_view idHex = {};
     std::string_view type = {};
@@ -180,20 +53,29 @@ struct ActorTableRow {
     float distance = 0.0f;
 };
 
+static std::string_view ActorFilterRowText(const void* rowContext, std::uint8_t fieldId);
+static bool ActorFilterRowBool(const void* rowContext, std::uint8_t fieldId);
+static float ActorFilterRowNumber(const void* rowContext, std::uint8_t fieldId);
+
+static const FilterRowAccess kActorFilterRowAccess{
+    ActorFilterRowText,
+    ActorFilterRowBool,
+    ActorFilterRowNumber,
+};
+
 static const char* ActorTableRowTextOrEmpty(std::string_view text) {
     return text.empty() ? "" : text.data();
 }
 
-static void PopulateActorTableRow(RE::Actor* actor, RE::PlayerCharacter* player, char* idHexBuf, std::size_t idHexBufSize,
-    std::string* taskBuf, ActorTableRow& out) {
+static void PopulateActorTableRow(RE::Actor* actor, RE::PlayerCharacter* player, std::string* taskBuf, ActorTableRow& out) {
     out = {};
 
     if (const char* displayName = actor->GetDisplayFullName()) {
         out.name = displayName;
     }
 
-    std::snprintf(idHexBuf, idHexBufSize, "%08X", actor->GetFormID());
-    out.idHex = idHexBuf;
+    std::snprintf(out.idHexBuf, sizeof(out.idHexBuf), "%08X", actor->GetFormID());
+    out.idHex = out.idHexBuf;
 
     if (const RE::TESBoundObject* base = actor->GetBaseObject()) {
         if (const char* typeName = base->GetName()) {
@@ -221,68 +103,47 @@ static void PopulateActorTableRow(RE::Actor* actor, RE::PlayerCharacter* player,
     }
 }
 
-static bool FilterMatchesPredicate(const ActorTableRow& values, const FilterPredicate& pred) {
-    bool matched = false;
-    const auto predField = static_cast<FilterField>(pred.field);
-
-    if (pred.op == FilterOp::IsTrue) {
-        if (predField == FilterField::Child) {
-            matched = values.isChild;
-        } else {
-            matched = false;
-        }
-    } else if (predField == FilterField::Distance) {
-        matched = FilterMatchFloatOp(pred.op, values.distance, pred.numberValue);
-    } else if (pred.valueKind == FilterValueKind::Text) {
-        std::string_view fieldText = {};
-        switch (predField) {
-        case FilterField::Name:
-            fieldText = values.name;
-            break;
-        case FilterField::Id:
-            fieldText = values.idHex;
-            break;
-        case FilterField::Type:
-            fieldText = values.type;
-            break;
-        case FilterField::Status:
-            fieldText = values.status;
-            break;
-        case FilterField::Location:
-            fieldText = values.location;
-            break;
-        case FilterField::Task:
-            fieldText = values.task;
-            break;
-        default:
-            fieldText = {};
-            break;
-        }
-        matched = FilterMatchTextOp(pred.op, fieldText, pred.textValue);
+static std::string_view ActorFilterRowText(const void* rowContext, std::uint8_t fieldId) {
+    const auto& row = *static_cast<const ActorTableRow*>(rowContext);
+    switch (static_cast<ActorFilterField>(fieldId)) {
+    case ActorFilterField::Name:
+        return row.name;
+    case ActorFilterField::Id:
+        return row.idHex;
+    case ActorFilterField::Type:
+        return row.type;
+    case ActorFilterField::Status:
+        return row.status;
+    case ActorFilterField::Location:
+        return row.location;
+    case ActorFilterField::Task:
+        return row.task;
+    default:
+        return {};
     }
-
-    return pred.negated ? !matched : matched;
 }
 
-static bool FilterMatchesAndGroup(const ActorTableRow& values, const FilterAndGroup& group) {
-    for (std::size_t i = 0; i < group.predicateCount; ++i) {
-        if (!FilterMatchesPredicate(values, group.predicates[i])) {
-            return false;
-        }
+static bool ActorFilterRowBool(const void* rowContext, std::uint8_t fieldId) {
+    const auto& row = *static_cast<const ActorTableRow*>(rowContext);
+    switch (static_cast<ActorFilterField>(fieldId)) {
+    case ActorFilterField::Child:
+        return row.isChild;
+    default:
+        return false;
     }
-    return true;
 }
 
-static bool FilterMatchesExpression(const FilterParseResult& expr, const ActorTableRow& values) {
-    for (std::size_t g = 0; g < expr.andGroupCount; ++g) {
-        if (FilterMatchesAndGroup(values, expr.andGroups[g])) {
-            return true;
-        }
+static float ActorFilterRowNumber(const void* rowContext, std::uint8_t fieldId) {
+    const auto& row = *static_cast<const ActorTableRow*>(rowContext);
+    switch (static_cast<ActorFilterField>(fieldId)) {
+    case ActorFilterField::Distance:
+        return row.distance;
+    default:
+        return 0.0f;
     }
-    return false;
 }
 
-static void RenderActorTableRow(const ActorTableRow& row, const char* taskText) {
+static void RenderActorTableRow(const ActorTableRow& row, std::string_view taskText) {
     ImGuiMCP::TableNextRow();
     ImGuiMCP::TableSetColumnIndex(0);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.name));
@@ -299,7 +160,7 @@ static void RenderActorTableRow(const ActorTableRow& row, const char* taskText) 
     ImGuiMCP::TableSetColumnIndex(6);
     ImGuiMCP::Text("%.2f", row.distance);
     ImGuiMCP::TableSetColumnIndex(7);
-    ImGuiMCP::TextUnformatted(taskText != nullptr ? taskText : "");
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(taskText));
 }
 
 void __stdcall UI::RenderActorListView() {
@@ -307,8 +168,7 @@ void __stdcall UI::RenderActorListView() {
     static char lastTokenizedFilter[256] = {};
     static FilterTokenizeResult tokenizeResult = {};
     static FilterParseResult parseResult = {};
-    static bool filterUsesTask = false;
-    static char filterIdHexBuf[16] = {};
+    static bool filterUsesExpensiveField = false;
     static std::string taskBuffer = [] {
         std::string s;
         s.reserve(128);
@@ -338,15 +198,15 @@ void __stdcall UI::RenderActorListView() {
         strncpy_s(lastTokenizedFilter, filterBuffer, sizeof(lastTokenizedFilter));
         lastTokenizedFilter[sizeof(lastTokenizedFilter) - 1] = '\0';
         FilterTokenize(filterBuffer, tokenizeResult);
-        FilterParseExpression(tokenizeResult, parseResult, FilterParsePredicateAt);
-        filterUsesTask = FilterExpressionUsesField(parseResult, static_cast<std::uint8_t>(FilterField::Task));
+        FilterParseExpression(tokenizeResult, parseResult, kActorFilterSchema);
+        filterUsesExpensiveField = FilterExpressionUsesExpensiveField(parseResult, kActorFilterSchema);
     }
     if (!parseResult.ok && parseResult.error[0] != '\0') {
         ImGuiMCP::TextColored(ImGuiMCP::ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%s", parseResult.error);
     }
     ImGuiMCP::Spacing();
 
-    const bool applyFilter = parseResult.hasExpression;
+    const bool applyFilter = tokenizeResult.ok && parseResult.hasExpression;
 
     constexpr ImGuiMCP::ImGuiTableFlags tableFlags = ImGuiMCP::ImGuiTableFlags_Resizable |
                                                      ImGuiMCP::ImGuiTableFlags_RowBg |
@@ -371,23 +231,21 @@ void __stdcall UI::RenderActorListView() {
             }
 
             ActorTableRow row = {};
-            const bool rowTaskFilledForFilter = applyFilter && filterUsesTask;
-            PopulateActorTableRow(currentActor, player, filterIdHexBuf, sizeof(filterIdHexBuf),
-                rowTaskFilledForFilter ? &taskBuffer : nullptr, row);
+            const bool fillExpensiveFields = applyFilter && filterUsesExpensiveField;
+            PopulateActorTableRow(currentActor, player, fillExpensiveFields ? &taskBuffer : nullptr, row);
 
-            if (applyFilter && !FilterMatchesExpression(parseResult, row)) {
+            if (applyFilter && !FilterMatchesExpression(parseResult, &row, kActorFilterSchema, kActorFilterRowAccess)) {
                 currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, currentForm, nullptr);
                 continue;
             }
 
-            if (!rowTaskFilledForFilter) {
+            std::string_view taskDisplay = row.task;
+            if (!fillExpensiveFields) {
                 taskBuffer.clear();
                 Utility::CreateTaskDescription(currentActor, taskBuffer);
+                taskDisplay = taskBuffer;
             }
-            RenderActorTableRow(row, taskBuffer.c_str());
-            if (!rowTaskFilledForFilter) {
-                taskBuffer.clear();
-            }
+            RenderActorTableRow(row, taskDisplay);
 
             currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, currentForm, nullptr);
         }
