@@ -1,0 +1,8 @@
+---
+description: General rules
+alwaysApply: true
+---
+
+- Do not add comments to generated code.
+- Do not use anonymous namespaces; prefer static.
+- Avoid dynamic memory allocation in hot paths, game loop code, and Papyrus-exposed functions.
