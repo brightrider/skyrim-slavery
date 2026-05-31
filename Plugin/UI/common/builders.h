@@ -13,3 +13,15 @@ struct ActorTableRow {
 };
 
 void PopulateActorTableRow(RE::Actor* actor, std::string* taskBuf, ActorTableRow& out);
+
+struct MarkerTableRow {
+    char idHexBuf[16] = {};
+    std::string_view jcName = {};
+    std::string_view idHex = {};
+    std::string_view description = {};
+    std::string_view location = {};
+    float distance = 0.0f;
+};
+
+void PopulateMarkerTableRow(RE::TESObjectREFR* marker, float distance, MarkerTableRow& out);
+void FormatMarkerDescription(const MarkerTableRow& row, std::string& buf);

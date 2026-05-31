@@ -103,5 +103,7 @@ struct FilterRowAccess {
 bool FilterTokenize(const char* input, FilterTokenizeResult& result);
 bool FilterParseExpression(const FilterTokenizeResult& tokens, FilterParseResult& out, const FilterSchema& schema);
 bool FilterExpressionUsesExpensiveField(const FilterParseResult& expr, const FilterSchema& schema);
+bool FilterMatchPredicate(const FilterPredicate& pred, const void* rowContext, const FilterSchema& schema,
+    const FilterRowAccess& access);
 bool FilterMatchesExpression(const FilterParseResult& expr, const void* rowContext, const FilterSchema& schema,
     const FilterRowAccess& access);

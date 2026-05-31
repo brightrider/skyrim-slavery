@@ -401,7 +401,8 @@ static bool FilterParsePredicateWithSchema(const FilterTokenizeResult& tokens, s
         FilterSetParseError(err, i - 1, "Invalid operator for text field");
         return false;
     }
-    if (tokens.tokens[i].kind != FilterTokenKind::Identifier && tokens.tokens[i].kind != FilterTokenKind::String) {
+    if (tokens.tokens[i].kind != FilterTokenKind::Identifier && tokens.tokens[i].kind != FilterTokenKind::String &&
+        tokens.tokens[i].kind != FilterTokenKind::Number) {
         FilterSetParseError(err, i, "Expected text");
         return false;
     }
@@ -609,7 +610,7 @@ bool FilterExpressionUsesExpensiveField(const FilterParseResult& expr, const Fil
     return false;
 }
 
-static bool FilterMatchPredicateWithSchema(const FilterPredicate& pred, const void* rowContext, const FilterSchema& schema,
+bool FilterMatchPredicate(const FilterPredicate& pred, const void* rowContext, const FilterSchema& schema,
     const FilterRowAccess& access) {
     if (access.getText == nullptr || access.getBool == nullptr || access.getNumber == nullptr) {
         return pred.negated;
@@ -644,7 +645,7 @@ static bool FilterMatchPredicateWithSchema(const FilterPredicate& pred, const vo
 static bool FilterMatchesAndGroup(const FilterAndGroup& group, const void* rowContext, const FilterSchema& schema,
     const FilterRowAccess& access) {
     for (std::size_t i = 0; i < group.predicateCount; ++i) {
-        if (!FilterMatchPredicateWithSchema(group.predicates[i], rowContext, schema, access)) {
+        if (!FilterMatchPredicate(group.predicates[i], rowContext, schema, access)) {
             return false;
         }
     }
