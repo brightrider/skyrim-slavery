@@ -306,6 +306,93 @@ static bool MarkerHasLinkedChildren(const RevLinks* links) {
     return links && links->count > 0;
 }
 
+static char markerRenameBuffer[128] = {};
+static std::string markerRenameOldName = [] {
+    std::string s;
+    s.reserve(128);
+    return s;
+}();
+static bool markerRenamePopupRequested = false;
+
+static bool MarkerNameHasNonWhitespace(const char* text) {
+    if (!text || text[0] == '\0') {
+        return false;
+    }
+    for (const char* p = text; *p != '\0'; ++p) {
+        if (!std::isspace(static_cast<unsigned char>(*p))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void RequestMarkerRename(std::string_view markerName) {
+    const char* src = markerName.empty() ? "" : markerName.data();
+    strncpy_s(markerRenameBuffer, sizeof(markerRenameBuffer), src, _TRUNCATE);
+    markerRenameOldName.assign(src);
+    markerRenamePopupRequested = true;
+}
+
+static void CommitMarkerRename(RE::TESQuest* markerControllerScript) {
+    if (!MarkerNameHasNonWhitespace(markerRenameBuffer)) {
+        return;
+    }
+    if (markerRenameOldName == markerRenameBuffer) {
+        return;
+    }
+    Papyrus::Call(
+        markerControllerScript,
+        "BRSSMarkerControllerScript",
+        "Rename",
+        [](RE::BSScript::Variable) {},
+        std::string(markerRenameOldName),
+        std::string(markerRenameBuffer)
+    );
+}
+
+static void RenderMarkerRenamePopup(RE::TESQuest* markerControllerScript) {
+    if (markerRenamePopupRequested) {
+        ImGuiMCP::OpenPopup("Rename marker");
+        markerRenamePopupRequested = false;
+    }
+
+    constexpr ImGuiMCP::ImGuiWindowFlags popupFlags = ImGuiMCP::ImGuiWindowFlags_AlwaysAutoResize;
+    if (!ImGuiMCP::BeginPopupModal("Rename marker", nullptr, popupFlags)) {
+        return;
+    }
+
+    ImGuiMCP::SetNextItemWidth(320.0f);
+    const bool nameEdited = ImGuiMCP::InputText(
+        "##MarkerRenameName",
+        markerRenameBuffer,
+        sizeof(markerRenameBuffer),
+        ImGuiMCP::ImGuiInputTextFlags_EnterReturnsTrue);
+    if (ImGuiMCP::IsWindowAppearing()) {
+        ImGuiMCP::SetKeyboardFocusHere(-1);
+    }
+    const bool nameEnter = nameEdited &&
+        (ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Enter, false) ||
+            ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_KeypadEnter, false));
+
+    bool closePopup = false;
+    if (ImGuiMCP::Button("OK") || nameEnter) {
+        if (MarkerNameHasNonWhitespace(markerRenameBuffer)) {
+            CommitMarkerRename(markerControllerScript);
+            closePopup = true;
+        }
+    }
+    ImGuiMCP::SameLine();
+    if (ImGuiMCP::Button("Cancel")) {
+        closePopup = true;
+    }
+
+    if (closePopup) {
+        ImGuiMCP::CloseCurrentPopup();
+    }
+
+    ImGuiMCP::EndPopup();
+}
+
 static void CollapsedHeader(const char* label, const void* uniqueId, std::string_view markerName,
     RE::TESQuest* markerControllerScript, const RevLinks* links, MarkerHeaderOpenForce openForce) {
     ImGuiMCP::PushID(uniqueId);
@@ -314,12 +401,13 @@ static void CollapsedHeader(const char* label, const void* uniqueId, std::string
     const float lineStartX = ImGuiMCP::GetCursorPosX();
     const float contentRight = ImGuiMCP::GetWindowContentRegionMax().x;
     const float rowWidth = contentRight - lineStartX;
-    const float deleteButtonSize = ImGuiMCP::GetFrameHeight();
-    const ImGuiMCP::ImVec2 deleteButtonSizeVec{ deleteButtonSize, deleteButtonSize };
+    const float actionButtonSize = ImGuiMCP::GetFrameHeight();
+    const ImGuiMCP::ImVec2 actionButtonSizeVec{ actionButtonSize, actionButtonSize };
     const float columnsSpacing = ImGuiMCP::GetStyle()->ColumnsMinSpacing;
+    const float actionButtonsWidth = actionButtonSize * 2.0f + columnsSpacing;
 
     ImGuiMCP::Columns(2, nullptr, false);
-    ImGuiMCP::SetColumnWidth(0, rowWidth - deleteButtonSize - columnsSpacing);
+    ImGuiMCP::SetColumnWidth(0, rowWidth - actionButtonsWidth - columnsSpacing);
 
     if (openForce == MarkerHeaderOpenForce::Expand) {
         ImGuiMCP::SetNextItemOpen(true, ImGuiMCP::ImGuiCond_Always);
@@ -331,11 +419,16 @@ static void CollapsedHeader(const char* label, const void* uniqueId, std::string
     ImGuiMCP::NextColumn();
     ImGuiMCP::SetCursorPosY(rowY);
 
+    if (ImGuiMCP::Button("R", actionButtonSizeVec)) {
+        RequestMarkerRename(markerName);
+    }
+    ImGuiMCP::SameLine();
+
     const bool hasLinkedChildren = MarkerHasLinkedChildren(links);
     if (hasLinkedChildren) {
         ImGuiMCP::BeginDisabled();
     }
-    if (ImGuiMCP::Button("X", deleteButtonSizeVec) && !hasLinkedChildren) {
+    if (ImGuiMCP::Button("X", actionButtonSizeVec) && !hasLinkedChildren) {
         Papyrus::Call(
             markerControllerScript,
             "BRSSMarkerControllerScript",
@@ -393,7 +486,8 @@ void __stdcall UI::RenderMarkerListView() {
         return;
     }
 
-    if (ImGuiMCP::IsWindowFocused(ImGuiMCP::ImGuiFocusedFlags_RootAndChildWindows) &&
+    if (ImGuiMCP::GetTopMostPopupModal() == nullptr &&
+        ImGuiMCP::IsWindowFocused(ImGuiMCP::ImGuiFocusedFlags_RootAndChildWindows) &&
         !ImGuiMCP::IsAnyItemActive() && !ImGuiMCP::IsMouseClicked(ImGuiMCP::ImGuiMouseButton_Left)) {
         ImGuiMCP::SetKeyboardFocusHere();
     }
@@ -537,4 +631,6 @@ void __stdcall UI::RenderMarkerListView() {
 
         newMarkerNameBuffer[0] = '\0';
     }
+
+    RenderMarkerRenamePopup(BRSS_MarkerControllerScript);
 }
