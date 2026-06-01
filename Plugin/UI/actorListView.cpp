@@ -6,7 +6,10 @@
 #include "common/filter.h"
 
 #include "../JCAPI.h"
+#include "../PAPI.h"
 #include "../utility.h"
+
+#include <cctype>
 
 enum class ActorFilterField : std::uint8_t {
     Unknown = 0,
@@ -56,6 +59,23 @@ static const char* ActorTableRowTextOrEmpty(std::string_view text) {
     return text.empty() ? "" : text.data();
 }
 
+static bool ActorNameHasNonWhitespace(const char* text) {
+    if (!text || text[0] == '\0') {
+        return false;
+    }
+    for (const char* p = text; *p != '\0'; ++p) {
+        if (!std::isspace(static_cast<unsigned char>(*p))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void CopyActorNameToEditBuffer(const ActorTableRow& row, char* buffer, std::size_t bufferSize) {
+    const char* src = ActorTableRowTextOrEmpty(row.name);
+    strncpy_s(buffer, bufferSize, src, _TRUNCATE);
+}
+
 static std::string_view ActorFilterRowText(const void* rowContext, std::uint8_t fieldId) {
     const auto& row = *static_cast<const ActorTableRow*>(rowContext);
     switch (static_cast<ActorFilterField>(fieldId)) {
@@ -96,10 +116,40 @@ static float ActorFilterRowNumber(const void* rowContext, std::uint8_t fieldId) 
     }
 }
 
-static void RenderActorTableRow(const ActorTableRow& row, std::string_view taskText) {
+static void RenderActorTableRow(const ActorTableRow& row, std::string_view taskText, RE::Actor* actor) {
+    static char nameEditBuffer[256] = {};
+
     ImGuiMCP::TableNextRow();
     ImGuiMCP::TableSetColumnIndex(0);
-    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.name));
+    ImGuiMCP::PushID(static_cast<int>(actor->GetFormID()));
+    const ImGuiMCP::ImGuiID nameFieldId = ImGuiMCP::GetID("##ActorName");
+    if (ImGuiMCP::GetActiveID() != nameFieldId) {
+        CopyActorNameToEditBuffer(row, nameEditBuffer, sizeof(nameEditBuffer));
+    }
+    ImGuiMCP::SetNextItemWidth(-ImGuiMCP::GET_FLT_MIN());
+    constexpr ImGuiMCP::ImVec4 kTransparentFrame{ 0.0f, 0.0f, 0.0f, 0.0f };
+    ImGuiMCP::PushStyleVar(ImGuiMCP::ImGuiStyleVar_FrameBorderSize, 0.0f);
+    ImGuiMCP::PushStyleVar(ImGuiMCP::ImGuiStyleVar_FramePadding, ImGuiMCP::ImVec2(0.0f, 0.0f));
+    ImGuiMCP::PushStyleColor(ImGuiMCP::ImGuiCol_FrameBg, kTransparentFrame);
+    ImGuiMCP::PushStyleColor(ImGuiMCP::ImGuiCol_FrameBgHovered, kTransparentFrame);
+    ImGuiMCP::PushStyleColor(ImGuiMCP::ImGuiCol_FrameBgActive, kTransparentFrame);
+    ImGuiMCP::InputText("##ActorName", nameEditBuffer, sizeof(nameEditBuffer));
+    ImGuiMCP::PopStyleColor(3);
+    ImGuiMCP::PopStyleVar(2);
+    if (ImGuiMCP::IsItemDeactivatedAfterEdit()) {
+        if (ActorNameHasNonWhitespace(nameEditBuffer)) {
+            Papyrus::Call(
+                actor,
+                "BRSSActorScript",
+                "SetActorName",
+                [](RE::BSScript::Variable) {},
+                std::string(nameEditBuffer)
+            );
+        } else {
+            CopyActorNameToEditBuffer(row, nameEditBuffer, sizeof(nameEditBuffer));
+        }
+    }
+    ImGuiMCP::PopID();
     ImGuiMCP::TableSetColumnIndex(1);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.idHex));
     ImGuiMCP::TableSetColumnIndex(2);
@@ -114,6 +164,18 @@ static void RenderActorTableRow(const ActorTableRow& row, std::string_view taskT
     ImGuiMCP::Text("%.2f", row.distance);
     ImGuiMCP::TableSetColumnIndex(7);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(taskText));
+    ImGuiMCP::TableSetColumnIndex(8);
+    ImGuiMCP::PushID(static_cast<int>(actor->GetFormID()));
+    const float deleteButtonSize = ImGuiMCP::GetFrameHeight();
+    if (ImGuiMCP::Button("X", ImGuiMCP::ImVec2{ deleteButtonSize, deleteButtonSize })) {
+        Papyrus::Call(
+            actor,
+            "BRSSActorScript",
+            "RemoveFromBRSS",
+            [](RE::BSScript::Variable) {}
+        );
+    }
+    ImGuiMCP::PopID();
 }
 
 void __stdcall UI::RenderActorListView() {
@@ -159,8 +221,9 @@ void __stdcall UI::RenderActorListView() {
     constexpr ImGuiMCP::ImGuiTableFlags tableFlags = ImGuiMCP::ImGuiTableFlags_Resizable |
                                                      ImGuiMCP::ImGuiTableFlags_RowBg |
                                                      ImGuiMCP::ImGuiTableFlags_SizingFixedFit;
-    if (ImGuiMCP::BeginTable("ActorListTable", 8, tableFlags)) {
-        ImGuiMCP::TableSetupColumn("Name");
+    const float deleteColumnWidth = ImGuiMCP::GetFrameHeight() + ImGuiMCP::GetStyle()->CellPadding.x * 2.0f;
+    if (ImGuiMCP::BeginTable("ActorListTable", 9, tableFlags)) {
+        ImGuiMCP::TableSetupColumn("Name", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 300.0f);
         ImGuiMCP::TableSetupColumn("ID");
         ImGuiMCP::TableSetupColumn("Type");
         ImGuiMCP::TableSetupColumn("Child");
@@ -168,6 +231,7 @@ void __stdcall UI::RenderActorListView() {
         ImGuiMCP::TableSetupColumn("Location");
         ImGuiMCP::TableSetupColumn("Distance");
         ImGuiMCP::TableSetupColumn("Task", ImGuiMCP::ImGuiTableColumnFlags_WidthStretch);
+        ImGuiMCP::TableSetupColumn("", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, deleteColumnWidth);
         ImGuiMCP::TableHeadersRow();
 
         RE::TESForm* currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, nullptr, nullptr);
@@ -193,7 +257,7 @@ void __stdcall UI::RenderActorListView() {
                 Utility::CreateTaskDescription(currentActor, taskBuffer);
                 taskDisplay = taskBuffer;
             }
-            RenderActorTableRow(row, taskDisplay);
+            RenderActorTableRow(row, taskDisplay, currentActor);
 
             currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, currentForm, nullptr);
         }
