@@ -178,7 +178,7 @@ static void RenderActorTableRow(const ActorTableRow& row, std::string_view taskT
     ImGuiMCP::PopID();
 }
 
-void __stdcall UI::RenderActorListView() {
+void __stdcall UI::ActorListView::Render() {
     static char filterBuffer[256] = {};
     static char lastTokenizedFilter[256] = {};
     static FilterTokenizeResult tokenizeResult = {};

@@ -11,6 +11,7 @@
 
 #include "../JCAPI.h"
 #include "../PAPI.h"
+#include "formSelector.h"
 
 struct RevLinks {
     std::array<RE::TESObjectREFR*, 128> refs;
@@ -451,7 +452,7 @@ static void CollapsedHeader(const char* label, const void* uniqueId, std::string
     ImGuiMCP::PopID();
 }
 
-void __stdcall UI::RenderMarkerListView() {
+void __stdcall UI::MarkerListView::Render() {
     static char filterBuffer[256] = {};
     static char lastTokenizedFilter[256] = {};
     static FilterTokenizeResult tokenizeResult = {};
@@ -612,8 +613,7 @@ void __stdcall UI::RenderMarkerListView() {
     const bool newMarkerNameEnter = newMarkerNameEdited &&
         (ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Enter, false) ||
             ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_KeypadEnter, false));
-    ImGuiMCP::SameLine();
-    if (ImGuiMCP::Button("Add new marker") || newMarkerNameEnter) {
+    const auto addNewMarker = [&](RE::TESForm* form) {
         const std::string_view newMarkerName = newMarkerNameBuffer;
         for (char c : newMarkerName) {
             if (!std::isspace(static_cast<unsigned char>(c))) {
@@ -623,13 +623,32 @@ void __stdcall UI::RenderMarkerListView() {
                     "Add",
                     [](RE::BSScript::Variable) {},
                     std::string(newMarkerName),
-                    static_cast<RE::TESForm*>(nullptr)
+                    static_cast<RE::TESForm*>(form)
                 );
                 break;
             }
         }
 
         newMarkerNameBuffer[0] = '\0';
+    };
+
+    ImGuiMCP::SameLine();
+    if (ImGuiMCP::Button("Add new marker") || newMarkerNameEnter) {
+        addNewMarker(nullptr);
+    }
+
+    ImGuiMCP::SameLine();
+    if (ImGuiMCP::Button("Add new marker with form")) {
+        if (MarkerNameHasNonWhitespace(newMarkerNameBuffer)) {
+            FormSelector::Open();
+        }
+    }
+
+    if (FormSelector::Window && !FormSelector::Window->IsOpen) {
+        RE::TESForm* selectedForm = nullptr;
+        if (FormSelector::ConsumeSelectedForm(selectedForm)) {
+            addNewMarker(selectedForm);
+        }
     }
 
     RenderMarkerRenamePopup(BRSS_MarkerControllerScript);

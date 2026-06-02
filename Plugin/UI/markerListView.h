@@ -1,5 +1,7 @@
 #pragma once
 
 namespace UI {
-    void __stdcall RenderMarkerListView();
+    namespace MarkerListView {
+        void __stdcall Render();
+    }
 }

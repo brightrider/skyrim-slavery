@@ -1,5 +1,7 @@
 #pragma once
 
 namespace UI {
-    void __stdcall RenderActorListView();
+    namespace ActorListView {
+        void __stdcall Render();
+    }
 }

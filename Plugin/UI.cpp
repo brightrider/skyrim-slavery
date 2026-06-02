@@ -4,13 +4,17 @@
 
 #include "UI/actorListView.h"
 #include "UI/markerListView.h"
+#include "UI/formSelector.h"
 
 void UI::Register() {
     if (!SKSEMenuFramework::IsInstalled()) {
         return;
     }
 
+    FormSelector::Window = SKSEMenuFramework::AddWindow(FormSelector::Render);
+    FormSelector::Window->IsOpen = false;
+
     SKSEMenuFramework::SetSection("Skyrim Slavery");
-    SKSEMenuFramework::AddSectionItem("Actor list", RenderActorListView);
-    SKSEMenuFramework::AddSectionItem("Marker list", RenderMarkerListView);
+    SKSEMenuFramework::AddSectionItem("Actor list", ActorListView::Render);
+    SKSEMenuFramework::AddSectionItem("Marker list", MarkerListView::Render);
 }
