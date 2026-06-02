@@ -487,15 +487,17 @@ void __stdcall UI::MarkerListView::Render() {
         return;
     }
 
-    if (ImGuiMCP::GetTopMostPopupModal() == nullptr &&
+    ImGuiMCP::ImGuiIO* io = ImGuiMCP::GetIO();
+    const bool focusFilterShortcut = io && io->KeyCtrl && !io->KeyAlt && !io->KeySuper &&
         ImGuiMCP::IsWindowFocused(ImGuiMCP::ImGuiFocusedFlags_RootAndChildWindows) &&
-        !ImGuiMCP::IsAnyItemActive() && !ImGuiMCP::IsMouseClicked(ImGuiMCP::ImGuiMouseButton_Left)) {
+        ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_L, false);
+    if (focusFilterShortcut) {
         ImGuiMCP::SetKeyboardFocusHere();
     }
     ImGuiMCP::SetNextItemWidth(-1.0f);
     ImGuiMCP::InputTextWithHint("##MarkerListFilter", "Filter...", filterBuffer, sizeof(filterBuffer));
     ImGuiMCP::TextDisabled(
-        "e.g. todo");
+        "Ctrl+L: focus filter  |  e.g. todo");
     if (std::strcmp(filterBuffer, lastTokenizedFilter) != 0) {
         strncpy_s(lastTokenizedFilter, filterBuffer, sizeof(lastTokenizedFilter));
         lastTokenizedFilter[sizeof(lastTokenizedFilter) - 1] = '\0';
