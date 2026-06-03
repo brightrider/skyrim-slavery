@@ -47,6 +47,93 @@ namespace Utility {
         return getFormEditorID ? getFormEditorID(formId) : nullptr;
     }
 
+    static void ForEachReferenceInRange(RE::TES* tes, RE::TESObjectREFR* a_origin, float a_radius, std::function<RE::BSContainer::ForEachResult(RE::TESObjectREFR& a_ref)> a_callback)
+	{
+		if (a_origin && a_radius > 0.0f) {
+			const auto originPos = a_origin->GetPosition();
+
+			if (tes->interiorCell) {
+				tes->interiorCell->ForEachReferenceInRange(originPos, a_radius, [&](RE::TESObjectREFR& a_ref) {
+					return a_callback(a_ref);
+				});
+			} else {
+				if (const auto gridLength = tes->gridCells ? tes->gridCells->length : 0; gridLength > 0) {
+					const float yPlus = originPos.y + a_radius;
+					const float yMinus = originPos.y - a_radius;
+					const float xPlus = originPos.x + a_radius;
+					const float xMinus = originPos.x - a_radius;
+
+					std::uint32_t x = 0;
+					do {
+						std::uint32_t y = 0;
+						do {
+							if (const auto cell = tes->gridCells->GetCell(x, y); cell && cell->IsAttached()) {
+								if (const auto cellCoords = cell->GetCoordinates(); cellCoords) {
+									const RE::NiPoint2 worldPos{ cellCoords->worldX, cellCoords->worldY };
+									if (worldPos.x < xPlus && (worldPos.x + 4096.0f) > xMinus && worldPos.y < yPlus && (worldPos.y + 4096.0f) > yMinus) {
+										cell->ForEachReferenceInRange(originPos, a_radius, [&](RE::TESObjectREFR& a_ref) {
+											return a_callback(a_ref);
+										});
+									}
+								}
+							}
+							++y;
+						} while (y < gridLength);
+						++x;
+					} while (x < gridLength);
+				}
+			}
+
+            auto originCell = a_origin->GetParentCell();
+            auto originWorldSpace = originCell ? originCell->GetRuntimeData().worldSpace : nullptr;
+			if (const auto skyCell = originWorldSpace ? originWorldSpace->GetSkyCell() : nullptr; skyCell) {
+				skyCell->ForEachReferenceInRange(originPos, a_radius, [&](RE::TESObjectREFR& a_ref) {
+					return a_callback(a_ref);
+				});
+			}
+		} else {
+			tes->ForEachReference([&](RE::TESObjectREFR& a_ref) {
+				return a_callback(a_ref);
+			});
+		}
+	}
+
+    // Copyright (c) 2021-2025 powerofthree
+    // See LICENSES/MIT-powerofthree.txt
+    std::vector<RE::TESObjectREFR*> FindAllReferencesOfFormTypes(
+        RE::TESObjectREFR* a_origin,
+        std::initializer_list<std::uint32_t> a_formTypes,
+        float a_radius)
+    {
+        std::vector<RE::TESObjectREFR*> result;
+
+        const auto TES = RE::TES::GetSingleton();
+        if (!TES || !a_origin) {
+            return result;
+        }
+
+        ForEachReferenceInRange(TES, a_origin, a_radius, [&](RE::TESObjectREFR& a_ref) {
+            if (!a_ref.Is3DLoaded()) {
+                return RE::BSContainer::ForEachResult::kContinue;
+            }
+
+            const auto base = a_ref.GetBaseObject();
+
+            for (auto rawType : a_formTypes) {
+                const auto formType = static_cast<RE::FormType>(rawType);
+
+                if (formType == RE::FormType::None || a_ref.Is(formType) || (base && base->Is(formType))) {
+                    result.push_back(&a_ref);
+                    break;
+                }
+            }
+
+            return RE::BSContainer::ForEachResult::kContinue;
+        });
+
+        return result;
+    }
+
     void CreateTaskDescription(RE::Actor* actor, std::string& buf) {
         RE::TESDataHandler* dh = RE::TESDataHandler::GetSingleton();
         if (!dh) {

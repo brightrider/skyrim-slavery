@@ -1,5 +1,8 @@
 #include "filter.h"
 
+#include <algorithm>
+#include <limits>
+
 static bool FilterMatchTextOp(FilterOp op, std::string_view fieldText, std::string_view needle);
 static bool FilterMatchFloatOp(FilterOp op, float value, double threshold);
 
@@ -666,6 +669,48 @@ bool FilterMatchesExpression(const FilterParseResult& expr, const void* rowConte
         }
     }
     return false;
+}
+
+float FilterGetLessUpperBound(const FilterParseResult& parseResult, std::uint8_t numberFieldId, float defaultValue) {
+    if (!parseResult.hasExpression || parseResult.andGroupCount == 0) {
+        return defaultValue;
+    }
+
+    float orMaxBound = 0.0f;
+    bool anyGroupHasLess = false;
+
+    for (std::size_t g = 0; g < parseResult.andGroupCount; ++g) {
+        const FilterAndGroup& group = parseResult.andGroups[g];
+        float andMinBound = std::numeric_limits<float>::max();
+        bool groupHasLess = false;
+
+        for (std::size_t p = 0; p < group.predicateCount; ++p) {
+            const FilterPredicate& pred = group.predicates[p];
+            if (pred.negated) {
+                continue;
+            }
+            if (pred.field != numberFieldId) {
+                continue;
+            }
+            if (pred.op != FilterOp::Less) {
+                continue;
+            }
+            if (pred.valueKind != FilterValueKind::Number) {
+                continue;
+            }
+
+            const float bound = static_cast<float>(pred.numberValue);
+            andMinBound = std::min(andMinBound, bound);
+            groupHasLess = true;
+        }
+
+        if (groupHasLess) {
+            anyGroupHasLess = true;
+            orMaxBound = std::max(orMaxBound, andMinBound);
+        }
+    }
+
+    return anyGroupHasLess ? orMaxBound : defaultValue;
 }
 
 static char FilterToLowerAscii(char c) {

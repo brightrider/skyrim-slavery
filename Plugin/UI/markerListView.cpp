@@ -1,5 +1,6 @@
 #include "markerListView.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstring>
 #include <memory_resource>
@@ -235,12 +236,12 @@ static const char* ActorTableRowTextOrEmpty(std::string_view text) {
     return text.empty() ? "" : text.data();
 }
 
-static void RenderActorTableRow(const ActorTableRow& row) {
+static void RenderActorTableRow(const ActorTableRow& row, RE::Actor* actor) {
     ImGuiMCP::TableNextRow();
     ImGuiMCP::TableSetColumnIndex(0);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.name));
     ImGuiMCP::TableSetColumnIndex(1);
-    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.idHex));
+    ImGuiMCP::Text("%08X", actor ? actor->GetFormID() : 0u);
     ImGuiMCP::TableSetColumnIndex(2);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.type));
     ImGuiMCP::TableSetColumnIndex(3);
@@ -290,7 +291,7 @@ static void RenderLinkedActors(const RevLinks* links) {
 
             ActorTableRow row = {};
             PopulateActorTableRow(actor, &taskBuffer, row);
-            RenderActorTableRow(row);
+            RenderActorTableRow(row, actor);
         }
 
         ImGuiMCP::EndTable();
@@ -398,51 +399,54 @@ static void CollapsedHeader(const char* label, const void* uniqueId, std::string
     RE::TESQuest* markerControllerScript, const RevLinks* links, MarkerHeaderOpenForce openForce) {
     ImGuiMCP::PushID(uniqueId);
 
-    const float rowY = ImGuiMCP::GetCursorPosY();
-    const float lineStartX = ImGuiMCP::GetCursorPosX();
-    const float contentRight = ImGuiMCP::GetWindowContentRegionMax().x;
-    const float rowWidth = contentRight - lineStartX;
+    const ImGuiMCP::ImGuiStyle* style = ImGuiMCP::GetStyle();
+    const float itemSpacing = style->ItemSpacing.x;
     const float actionButtonSize = ImGuiMCP::GetFrameHeight();
     const ImGuiMCP::ImVec2 actionButtonSizeVec{ actionButtonSize, actionButtonSize };
-    const float columnsSpacing = ImGuiMCP::GetStyle()->ColumnsMinSpacing;
-    const float actionButtonsWidth = actionButtonSize * 2.0f + columnsSpacing;
-
-    ImGuiMCP::Columns(2, nullptr, false);
-    ImGuiMCP::SetColumnWidth(0, rowWidth - actionButtonsWidth - columnsSpacing);
+    const float actionButtonsWidth = actionButtonSize * 2.0f + itemSpacing + style->CellPadding.x * 2.0f;
 
     if (openForce == MarkerHeaderOpenForce::Expand) {
         ImGuiMCP::SetNextItemOpen(true, ImGuiMCP::ImGuiCond_Always);
     } else if (openForce == MarkerHeaderOpenForce::Collapse) {
         ImGuiMCP::SetNextItemOpen(false, ImGuiMCP::ImGuiCond_Always);
     }
-    const bool headerOpen = ImGuiMCP::CollapsingHeader(label);
 
-    ImGuiMCP::NextColumn();
-    ImGuiMCP::SetCursorPosY(rowY);
+    constexpr ImGuiMCP::ImGuiTableFlags headerTableFlags = ImGuiMCP::ImGuiTableFlags_SizingFixedFit |
+                                                          ImGuiMCP::ImGuiTableFlags_NoBordersInBody |
+                                                          ImGuiMCP::ImGuiTableFlags_NoPadOuterX;
+    bool headerOpen = false;
+    if (ImGuiMCP::BeginTable("##MarkerHeaderRow", 2, headerTableFlags)) {
+        ImGuiMCP::TableSetupColumn("##MarkerLabel", ImGuiMCP::ImGuiTableColumnFlags_WidthStretch);
+        ImGuiMCP::TableSetupColumn("##MarkerActions", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, actionButtonsWidth);
+        ImGuiMCP::TableNextRow();
 
-    if (ImGuiMCP::Button("R", actionButtonSizeVec)) {
-        RequestMarkerRename(markerName);
-    }
-    ImGuiMCP::SameLine();
+        ImGuiMCP::TableSetColumnIndex(0);
+        headerOpen = ImGuiMCP::CollapsingHeader(label);
 
-    const bool hasLinkedChildren = MarkerHasLinkedChildren(links);
-    if (hasLinkedChildren) {
-        ImGuiMCP::BeginDisabled();
-    }
-    if (ImGuiMCP::Button("X", actionButtonSizeVec) && !hasLinkedChildren) {
-        Papyrus::Call(
-            markerControllerScript,
-            "BRSSMarkerControllerScript",
-            "Remove",
-            [](RE::BSScript::Variable) {},
-            std::string(markerName)
-        );
-    }
-    if (hasLinkedChildren) {
-        ImGuiMCP::EndDisabled();
-    }
+        ImGuiMCP::TableSetColumnIndex(1);
+        if (ImGuiMCP::Button("R", actionButtonSizeVec)) {
+            RequestMarkerRename(markerName);
+        }
+        ImGuiMCP::SameLine();
+        const bool hasLinkedChildren = MarkerHasLinkedChildren(links);
+        if (hasLinkedChildren) {
+            ImGuiMCP::BeginDisabled();
+        }
+        if (ImGuiMCP::Button("X", actionButtonSizeVec) && !hasLinkedChildren) {
+            Papyrus::Call(
+                markerControllerScript,
+                "BRSSMarkerControllerScript",
+                "Remove",
+                [](RE::BSScript::Variable) {},
+                std::string(markerName)
+            );
+        }
+        if (hasLinkedChildren) {
+            ImGuiMCP::EndDisabled();
+        }
 
-    ImGuiMCP::Columns(1);
+        ImGuiMCP::EndTable();
+    }
 
     if (headerOpen) {
         ImGuiMCP::Indent();
@@ -572,35 +576,43 @@ void __stdcall UI::MarkerListView::Render() {
 
     ActorTableRow filterActorRow = {};
 
-    currentForm = JC::jFormMapNextKey(JC::Domain, markerDb, nullptr, nullptr);
-    while (currentForm) {
-        RE::TESObjectREFR* currentMarker = currentForm->As<RE::TESObjectREFR>();
-        if (!currentMarker) {
+    const float bottomPanelHeight = ImGuiMCP::GetFrameHeightWithSpacing() * 2.0f + ImGuiMCP::GetStyle()->ItemSpacing.y * 2.0f;
+    ImGuiMCP::ImVec2 listAvail{};
+    ImGuiMCP::GetContentRegionAvail(&listAvail);
+    const float listHeight = std::max(0.0f, listAvail.y - bottomPanelHeight);
+
+    if (ImGuiMCP::BeginChild("##MarkerListScroll", ImGuiMCP::ImVec2{0.0f, listHeight}, 0)) {
+        currentForm = JC::jFormMapNextKey(JC::Domain, markerDb, nullptr, nullptr);
+        while (currentForm) {
+            RE::TESObjectREFR* currentMarker = currentForm->As<RE::TESObjectREFR>();
+            if (!currentMarker) {
+                currentForm = JC::jFormMapNextKey(JC::Domain, markerDb, currentForm, nullptr);
+                continue;
+            }
+
+            const float markerDistance = currentMarker->GetPosition().GetDistance(player->GetPosition());
+
+            MarkerTableRow markerRow = {};
+            PopulateMarkerTableRow(currentMarker, markerDistance, markerRow);
+
+            const RevLinks* links = nullptr;
+            if (const auto it = revLink.find(currentMarker); it != revLink.end()) {
+                links = &it->second;
+            }
+
+            if (applyFilter &&
+                !MarkerFilterMatchesExpression(parseResult, markerRow, links, filterActorRow,
+                    fillActorExpensive ? &filterActorTaskBuffer : nullptr, fillActorExpensive)) {
+                currentForm = JC::jFormMapNextKey(JC::Domain, markerDb, currentForm, nullptr);
+                continue;
+            }
+
+            FormatMarkerDescription(markerRow, header);
+            CollapsedHeader(header.c_str(), currentMarker, markerRow.jcName, BRSS_MarkerControllerScript, links, headerOpenForce);
+
             currentForm = JC::jFormMapNextKey(JC::Domain, markerDb, currentForm, nullptr);
-            continue;
         }
-
-        const float markerDistance = currentMarker->GetPosition().GetDistance(player->GetPosition());
-
-        MarkerTableRow markerRow = {};
-        PopulateMarkerTableRow(currentMarker, markerDistance, markerRow);
-
-        const RevLinks* links = nullptr;
-        if (const auto it = revLink.find(currentMarker); it != revLink.end()) {
-            links = &it->second;
-        }
-
-        if (applyFilter &&
-            !MarkerFilterMatchesExpression(parseResult, markerRow, links, filterActorRow,
-                fillActorExpensive ? &filterActorTaskBuffer : nullptr, fillActorExpensive)) {
-            currentForm = JC::jFormMapNextKey(JC::Domain, markerDb, currentForm, nullptr);
-            continue;
-        }
-
-        FormatMarkerDescription(markerRow, header);
-        CollapsedHeader(header.c_str(), currentMarker, markerRow.jcName, BRSS_MarkerControllerScript, links, headerOpenForce);
-
-        currentForm = JC::jFormMapNextKey(JC::Domain, markerDb, currentForm, nullptr);
+        ImGuiMCP::EndChild();
     }
 
     ImGuiMCP::Separator();

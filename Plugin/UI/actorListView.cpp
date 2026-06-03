@@ -16,6 +16,8 @@
 #include "../PAPI.h"
 #include "../utility.h"
 
+#include "actorSelector.h"
+
 enum class ActorFilterField : std::uint8_t {
     Unknown = 0,
     Name,
@@ -274,7 +276,7 @@ static void RenderActorTableRow(
     }
 
     ImGuiMCP::TableSetColumnIndex(1);
-    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.idHex));
+    ImGuiMCP::Text("%08X", actor->GetFormID());
     ImGuiMCP::TableSetColumnIndex(2);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.type));
     ImGuiMCP::TableSetColumnIndex(3);
@@ -452,49 +454,51 @@ void __stdcall UI::ActorListView::Render() {
 
     ActorTableRow row = {};
 
-    constexpr ImGuiMCP::ImGuiTableFlags tableFlags = ImGuiMCP::ImGuiTableFlags_Resizable |
-                                                     ImGuiMCP::ImGuiTableFlags_RowBg |
-                                                     ImGuiMCP::ImGuiTableFlags_SizingFixedFit;
-    const float actionButtonSize = ImGuiMCP::GetFrameHeight();
-    const float actionsColumnWidth = actionButtonSize * 3.0f + ImGuiMCP::GetStyle()->ItemSpacing.x * 2.0f +
-                                     ImGuiMCP::GetStyle()->CellPadding.x * 2.0f;
-    if (ImGuiMCP::BeginTable("ActorListTable", 9, tableFlags)) {
-        ImGuiMCP::TableSetupColumn("Name", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 300.0f);
-        ImGuiMCP::TableSetupColumn("ID");
-        ImGuiMCP::TableSetupColumn("Type");
-        ImGuiMCP::TableSetupColumn("Child");
-        ImGuiMCP::TableSetupColumn("Status");
-        ImGuiMCP::TableSetupColumn("Location");
-        ImGuiMCP::TableSetupColumn("Distance");
-        ImGuiMCP::TableSetupColumn("Task", ImGuiMCP::ImGuiTableColumnFlags_WidthStretch);
-        ImGuiMCP::TableSetupColumn("", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, actionsColumnWidth);
-        ImGuiMCP::TableHeadersRow();
-        ImGuiMCP::TableSetColumnIndex(0);
-        ImGuiMCP::Selectable(
-            "##ActorTableHeaderDnD",
-            false,
-            ImGuiMCP::ImGuiSelectableFlags_SpanAllColumns | ImGuiMCP::ImGuiSelectableFlags_AllowOverlap);
-        AcceptActorRowDragDropAtTarget(nullptr);
+    ImGuiMCP::ImVec2 tableAvail{};
+    ImGuiMCP::GetContentRegionAvail(&tableAvail);
 
-        currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, nullptr, nullptr);
-        while (currentForm) {
-            RE::Actor* currentActor = currentForm->As<RE::Actor>();
-            if (currentActor && followChildSet.find(currentActor) == followChildSet.end()) {
-                if (!applyFilter ||
-                    FollowSubtreeMatchesFilter(currentActor, followChildrenByParent, parseResult, fillExpensiveFields, taskBuffer, row)) {
-                    RenderFollowSubtree(currentActor, 0, followChildrenByParent, fillExpensiveFields, taskBuffer, row);
+    if (ImGuiMCP::BeginChild("##ActorListTable", ImGuiMCP::ImVec2{0.0f, tableAvail.y}, 0)) {
+        constexpr ImGuiMCP::ImGuiTableFlags tableFlags = ImGuiMCP::ImGuiTableFlags_Resizable |
+                                                         ImGuiMCP::ImGuiTableFlags_RowBg |
+                                                         ImGuiMCP::ImGuiTableFlags_SizingFixedFit |
+                                                         ImGuiMCP::ImGuiTableFlags_ScrollY;
+        const float actionButtonSize = ImGuiMCP::GetFrameHeight();
+        const float actionsColumnWidth = actionButtonSize * 3.0f + ImGuiMCP::GetStyle()->ItemSpacing.x * 2.0f +
+                                         ImGuiMCP::GetStyle()->CellPadding.x * 2.0f;
+        if (ImGuiMCP::BeginTable("ActorListTable", 9, tableFlags)) {
+            ImGuiMCP::TableSetupColumn("Name", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 300.0f);
+            ImGuiMCP::TableSetupColumn("ID");
+            ImGuiMCP::TableSetupColumn("Type");
+            ImGuiMCP::TableSetupColumn("Child");
+            ImGuiMCP::TableSetupColumn("Status");
+            ImGuiMCP::TableSetupColumn("Location");
+            ImGuiMCP::TableSetupColumn("Distance");
+            ImGuiMCP::TableSetupColumn("Task", ImGuiMCP::ImGuiTableColumnFlags_WidthStretch);
+            ImGuiMCP::TableSetupColumn("", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, actionsColumnWidth);
+            ImGuiMCP::TableSetupScrollFreeze(0, 1);
+            ImGuiMCP::TableHeadersRow();
+            ImGuiMCP::TableSetColumnIndex(0);
+            ImGuiMCP::Selectable(
+                "##ActorTableHeaderDnD",
+                false,
+                ImGuiMCP::ImGuiSelectableFlags_SpanAllColumns | ImGuiMCP::ImGuiSelectableFlags_AllowOverlap);
+            AcceptActorRowDragDropAtTarget(nullptr);
+
+            currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, nullptr, nullptr);
+            while (currentForm) {
+                RE::Actor* currentActor = currentForm->As<RE::Actor>();
+                if (currentActor && followChildSet.find(currentActor) == followChildSet.end()) {
+                    if (!applyFilter ||
+                        FollowSubtreeMatchesFilter(currentActor, followChildrenByParent, parseResult, fillExpensiveFields, taskBuffer, row)) {
+                        RenderFollowSubtree(currentActor, 0, followChildrenByParent, fillExpensiveFields, taskBuffer, row);
+                    }
                 }
+                currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, currentForm, nullptr);
             }
-            currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, currentForm, nullptr);
+
+            ImGuiMCP::EndTable();
         }
-
-        ImGuiMCP::EndTable();
-    }
-
-    ImGuiMCP::ImVec2 contentAvail = {};
-    ImGuiMCP::GetContentRegionAvail(&contentAvail);
-    if (contentAvail.y > 0.0f) {
-        ImGuiMCP::Dummy(ImGuiMCP::ImVec2{ -ImGuiMCP::GET_FLT_MIN(), contentAvail.y });
         AcceptActorRowDragDropAtTarget(nullptr);
+        ImGuiMCP::EndChild();
     }
 }

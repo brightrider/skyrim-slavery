@@ -176,7 +176,6 @@ void UI::FormSelector::Open() {
     g_hasSelectedForm = false;
     g_selectedForm = nullptr;
     g_pendingForm = nullptr;
-    g_filterBuffer[0] = '\0';
     g_focusFilterOnOpen = true;
     EnsureEntriesBuilt();
     if (Window) {
@@ -204,6 +203,7 @@ void __stdcall UI::FormSelector::Render() {
     };
     ImGuiMCP::SetNextWindowPos(center, ImGuiMCP::ImGuiCond_Appearing, ImGuiMCP::ImVec2{0.5f, 0.5f});
     ImGuiMCP::SetNextWindowSize(ImGuiMCP::ImVec2{viewport->Size.x * 0.4f, viewport->Size.y * 0.4f}, ImGuiMCP::ImGuiCond_Appearing);
+    ImGuiMCP::SetNextWindowBgAlpha(1.0f);
     ImGuiMCP::Begin("Form selector##SkyrimSlavery", nullptr, 0);
 
     EnsureEntriesBuilt();
@@ -213,14 +213,14 @@ void __stdcall UI::FormSelector::Render() {
         ImGuiMCP::ImGuiInputFlags_RouteFocused | ImGuiMCP::ImGuiInputFlags_RouteOverActive);
     ImGuiMCP::ImGuiIO* io = ImGuiMCP::GetIO();
     const bool cancelShortcut = io && io->KeyCtrl && !io->KeyAlt && !io->KeySuper &&
-        ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_X, false);
+        ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Q, false);
     if (g_focusFilterOnOpen || focusFilterShortcut) {
         ImGuiMCP::SetKeyboardFocusHere();
         g_focusFilterOnOpen = false;
     }
     ImGuiMCP::SetNextItemWidth(-1.0f);
     ImGuiMCP::InputTextWithHint("##FormSelectorFilter", "Filter...", g_filterBuffer, sizeof(g_filterBuffer));
-    ImGuiMCP::TextDisabled("Ctrl+L: focus filter | Ctrl+X: cancel | Prefix: acti:/stat:/mstt:/furn:/cont:/idlm:");
+    ImGuiMCP::TextDisabled("Ctrl+L: focus filter | Ctrl+Q: cancel | Prefix: acti:/stat:/mstt:/furn:/cont:/idlm:");
     ImGuiMCP::Spacing();
 
     const char* textFilter = g_filterBuffer;

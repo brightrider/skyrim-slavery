@@ -107,3 +107,4 @@ bool FilterMatchPredicate(const FilterPredicate& pred, const void* rowContext, c
     const FilterRowAccess& access);
 bool FilterMatchesExpression(const FilterParseResult& expr, const void* rowContext, const FilterSchema& schema,
     const FilterRowAccess& access);
+float FilterGetLessUpperBound(const FilterParseResult& parseResult, std::uint8_t numberFieldId, float defaultValue);
