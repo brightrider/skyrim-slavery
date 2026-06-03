@@ -60,6 +60,55 @@ static const FilterRowAccess kActorFilterRowAccess{
     ActorFilterRowNumber,
 };
 
+static constexpr const char* kActorRowDragDropPayloadType = "SS_ActorRow";
+
+static RE::Actor* ActorPtrFromDragDropPayload(const ImGuiMCP::ImGuiPayload* payload) {
+    if (!payload || payload->DataSize != static_cast<int>(sizeof(RE::Actor*))) {
+        return nullptr;
+    }
+    return *static_cast<RE::Actor* const*>(payload->Data);
+}
+
+static void OnActorRowDragDropDelivered(RE::Actor* sourceActor, RE::Actor* targetActor) {
+    if (!sourceActor) {
+        return;
+    }
+
+    if (targetActor) {
+        Papyrus::Call(
+            sourceActor,
+            "BRSSActorScript",
+            "Follow",
+            [](RE::BSScript::Variable) {},
+            static_cast<RE::TESObjectREFR*>(targetActor),
+            false
+        );
+    } else {
+        Papyrus::Call(
+            sourceActor,
+            "BRSSActorScript",
+            "Wait",
+            [](RE::BSScript::Variable) {},
+            false
+        );
+    }
+}
+
+static void AcceptActorRowDragDropAtTarget(RE::Actor* targetActor) {
+    if (!ImGuiMCP::BeginDragDropTarget()) {
+        return;
+    }
+    const ImGuiMCP::ImGuiPayload* payload =
+        ImGuiMCP::AcceptDragDropPayload(kActorRowDragDropPayloadType);
+    if (payload) {
+        RE::Actor* sourceActor = ActorPtrFromDragDropPayload(payload);
+        if (sourceActor && payload->Delivery) {
+            OnActorRowDragDropDelivered(sourceActor, targetActor);
+        }
+    }
+    ImGuiMCP::EndDragDropTarget();
+}
+
 using FollowChildrenMap = std::pmr::unordered_map<RE::Actor*, std::pmr::vector<RE::Actor*>>;
 using FollowChildSet = std::pmr::unordered_set<RE::Actor*>;
 
@@ -242,8 +291,32 @@ static void RenderActorTableRow(
     }
     ImGuiMCP::TableSetColumnIndex(8);
     ImGuiMCP::PushID(static_cast<int>(actor->GetFormID()));
-    const float deleteButtonSize = ImGuiMCP::GetFrameHeight();
-    if (ImGuiMCP::Button("X", ImGuiMCP::ImVec2{ deleteButtonSize, deleteButtonSize })) {
+    const float actionButtonSize = ImGuiMCP::GetFrameHeight();
+    const ImGuiMCP::ImVec2 actionButtonSizeVec{ actionButtonSize, actionButtonSize };
+    if (ImGuiMCP::Button("W", actionButtonSizeVec)) {
+        Papyrus::Call(
+            actor,
+            "BRSSActorScript",
+            "Wait",
+            [](RE::BSScript::Variable) {},
+            false
+        );
+    }
+    ImGuiMCP::SetItemTooltip("Wait");
+    ImGuiMCP::SameLine();
+    if (ImGuiMCP::Button("F", actionButtonSizeVec)) {
+        Papyrus::Call(
+            actor,
+            "BRSSActorScript",
+            "Follow",
+            [](RE::BSScript::Variable) {},
+            static_cast<RE::TESObjectREFR*>(RE::PlayerCharacter::GetSingleton()),
+            false
+        );
+    }
+    ImGuiMCP::SetItemTooltip("Follow player");
+    ImGuiMCP::SameLine();
+    if (ImGuiMCP::Button("X", actionButtonSizeVec)) {
         Papyrus::Call(
             actor,
             "BRSSActorScript",
@@ -251,6 +324,19 @@ static void RenderActorTableRow(
             [](RE::BSScript::Variable) {}
         );
     }
+    ImGuiMCP::PopID();
+
+    ImGuiMCP::TableSetColumnIndex(0);
+    ImGuiMCP::PushID(static_cast<int>(actor->GetFormID()));
+    ImGuiMCP::Selectable(
+        "##ActorRowDnD",
+        false,
+        ImGuiMCP::ImGuiSelectableFlags_SpanAllColumns | ImGuiMCP::ImGuiSelectableFlags_AllowOverlap);
+    if (ImGuiMCP::BeginDragDropSource(ImGuiMCP::ImGuiDragDropFlags_SourceAllowNullID)) {
+        ImGuiMCP::SetDragDropPayload(kActorRowDragDropPayloadType, &actor, sizeof(RE::Actor*));
+        ImGuiMCP::EndDragDropSource();
+    }
+    AcceptActorRowDragDropAtTarget(actor);
     ImGuiMCP::PopID();
 }
 
@@ -320,8 +406,10 @@ void __stdcall UI::ActorListView::Render() {
     }
     ImGuiMCP::SetNextItemWidth(-1.0f);
     ImGuiMCP::InputTextWithHint("##ActorListFilter", "Filter...", filterBuffer, sizeof(filterBuffer));
+    AcceptActorRowDragDropAtTarget(nullptr);
     ImGuiMCP::TextDisabled(
         "Ctrl+L: focus filter  |  e.g. name contains lydia and di < 1000 or not child  |  not, ==, contains(ct), startswith(sw), endswith(ew), <, >  |  a or b and c = a or (b and c)  |  \"quotes for spaces\"");
+    AcceptActorRowDragDropAtTarget(nullptr);
     if (std::strcmp(filterBuffer, lastTokenizedFilter) != 0) {
         strncpy_s(lastTokenizedFilter, filterBuffer, sizeof(lastTokenizedFilter));
         lastTokenizedFilter[sizeof(lastTokenizedFilter) - 1] = '\0';
@@ -333,6 +421,7 @@ void __stdcall UI::ActorListView::Render() {
         ImGuiMCP::TextColored(ImGuiMCP::ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%s", parseResult.error);
     }
     ImGuiMCP::Spacing();
+    AcceptActorRowDragDropAtTarget(nullptr);
 
     const bool applyFilter = tokenizeResult.ok && parseResult.hasExpression;
     const bool fillExpensiveFields = applyFilter && filterUsesExpensiveField;
@@ -366,7 +455,9 @@ void __stdcall UI::ActorListView::Render() {
     constexpr ImGuiMCP::ImGuiTableFlags tableFlags = ImGuiMCP::ImGuiTableFlags_Resizable |
                                                      ImGuiMCP::ImGuiTableFlags_RowBg |
                                                      ImGuiMCP::ImGuiTableFlags_SizingFixedFit;
-    const float deleteColumnWidth = ImGuiMCP::GetFrameHeight() + ImGuiMCP::GetStyle()->CellPadding.x * 2.0f;
+    const float actionButtonSize = ImGuiMCP::GetFrameHeight();
+    const float actionsColumnWidth = actionButtonSize * 3.0f + ImGuiMCP::GetStyle()->ItemSpacing.x * 2.0f +
+                                     ImGuiMCP::GetStyle()->CellPadding.x * 2.0f;
     if (ImGuiMCP::BeginTable("ActorListTable", 9, tableFlags)) {
         ImGuiMCP::TableSetupColumn("Name", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 300.0f);
         ImGuiMCP::TableSetupColumn("ID");
@@ -376,8 +467,14 @@ void __stdcall UI::ActorListView::Render() {
         ImGuiMCP::TableSetupColumn("Location");
         ImGuiMCP::TableSetupColumn("Distance");
         ImGuiMCP::TableSetupColumn("Task", ImGuiMCP::ImGuiTableColumnFlags_WidthStretch);
-        ImGuiMCP::TableSetupColumn("", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, deleteColumnWidth);
+        ImGuiMCP::TableSetupColumn("", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, actionsColumnWidth);
         ImGuiMCP::TableHeadersRow();
+        ImGuiMCP::TableSetColumnIndex(0);
+        ImGuiMCP::Selectable(
+            "##ActorTableHeaderDnD",
+            false,
+            ImGuiMCP::ImGuiSelectableFlags_SpanAllColumns | ImGuiMCP::ImGuiSelectableFlags_AllowOverlap);
+        AcceptActorRowDragDropAtTarget(nullptr);
 
         currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, nullptr, nullptr);
         while (currentForm) {
@@ -392,5 +489,12 @@ void __stdcall UI::ActorListView::Render() {
         }
 
         ImGuiMCP::EndTable();
+    }
+
+    ImGuiMCP::ImVec2 contentAvail = {};
+    ImGuiMCP::GetContentRegionAvail(&contentAvail);
+    if (contentAvail.y > 0.0f) {
+        ImGuiMCP::Dummy(ImGuiMCP::ImVec2{ -ImGuiMCP::GET_FLT_MIN(), contentAvail.y });
+        AcceptActorRowDragDropAtTarget(nullptr);
     }
 }
