@@ -16,6 +16,7 @@ void PopulateActorTableRow(RE::Actor* actor, std::string* taskBuf, ActorTableRow
 
 struct MarkerTableRow {
     char idHexBuf[16] = {};
+    RE::BSFixedString jcNameStorage;
     std::string_view jcName = {};
     std::string_view idHex = {};
     std::string_view description = {};

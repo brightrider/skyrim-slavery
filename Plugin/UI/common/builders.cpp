@@ -58,14 +58,19 @@ void PopulateMarkerTableRow(RE::TESObjectREFR* marker, float distance, MarkerTab
 
     JC::ObjectId markerDb = JC::GetMarkerDb();
     if (markerDb == 0) {
-        out.jcName = "unknown";
+        out.jcNameStorage = "unknown";
+        out.jcName = out.jcNameStorage.c_str();
         out.idHex = "unknown";
         out.description = "unknown";
         out.location = "unknown";
         return;
     }
 
-    out.jcName = JC::jFormMapGetStr(JC::Domain, markerDb, marker, "unknown").c_str();
+    out.jcNameStorage = JC::jFormMapGetStr(JC::Domain, markerDb, marker, "unknown");
+    if (out.jcNameStorage.empty()) {
+        out.jcNameStorage = "unknown";
+    }
+    out.jcName = out.jcNameStorage.c_str();
 
     auto [idPtr, idEc] = std::to_chars(out.idHexBuf, out.idHexBuf + sizeof(out.idHexBuf), marker->GetFormID(), 16);
     if (idEc == std::errc{}) {

@@ -1,5 +1,12 @@
 #include "actorListView.h"
 
+#include <array>
+#include <cctype>
+#include <cstring>
+#include <memory_resource>
+#include <unordered_map>
+#include <unordered_set>
+
 #include "../SKSEMenuFramework.h"
 
 #include "common/builders.h"
@@ -8,8 +15,6 @@
 #include "../JCAPI.h"
 #include "../PAPI.h"
 #include "../utility.h"
-
-#include <cctype>
 
 enum class ActorFilterField : std::uint8_t {
     Unknown = 0,
@@ -54,6 +59,9 @@ static const FilterRowAccess kActorFilterRowAccess{
     ActorFilterRowBool,
     ActorFilterRowNumber,
 };
+
+using FollowChildrenMap = std::pmr::unordered_map<RE::Actor*, std::pmr::vector<RE::Actor*>>;
+using FollowChildSet = std::pmr::unordered_set<RE::Actor*>;
 
 static const char* ActorTableRowTextOrEmpty(std::string_view text) {
     return text.empty() ? "" : text.data();
@@ -116,11 +124,72 @@ static float ActorFilterRowNumber(const void* rowContext, std::uint8_t fieldId) 
     }
 }
 
-static void RenderActorTableRow(const ActorTableRow& row, std::string_view taskText, RE::Actor* actor) {
+static RE::Actor* GetFollowParentInActorDb(
+    RE::Actor* actor,
+    RE::BGSKeyword* packageKeyword1,
+    JC::ObjectId actorDb) {
+    if (!actor || !packageKeyword1 || !JC::jFormMapHasKey) {
+        return nullptr;
+    }
+
+    RE::ActorValueOwner* valueOwner = actor->AsActorValueOwner();
+    if (!valueOwner || static_cast<int>(valueOwner->GetBaseActorValue(RE::ActorValue::kVariable08)) != 2) {
+        return nullptr;
+    }
+
+    RE::TESObjectREFR* link = actor->GetLinkedRef(packageKeyword1);
+    RE::Actor* parent = link ? link->As<RE::Actor>() : nullptr;
+    if (!parent || !JC::jFormMapHasKey(JC::Domain, actorDb, parent)) {
+        return nullptr;
+    }
+
+    return parent;
+}
+
+static bool FollowSubtreeMatchesFilter(
+    RE::Actor* actor,
+    const FollowChildrenMap& followChildrenByParent,
+    const FilterParseResult& parseResult,
+    bool fillExpensiveFields,
+    std::string& taskBuffer,
+    ActorTableRow& row) {
+    PopulateActorTableRow(actor, fillExpensiveFields ? &taskBuffer : nullptr, row);
+    if (FilterMatchesExpression(parseResult, &row, kActorFilterSchema, kActorFilterRowAccess)) {
+        return true;
+    }
+
+    const auto childrenIt = followChildrenByParent.find(actor);
+    if (childrenIt == followChildrenByParent.end()) {
+        return false;
+    }
+
+    for (RE::Actor* child : childrenIt->second) {
+        if (FollowSubtreeMatchesFilter(child, followChildrenByParent, parseResult, fillExpensiveFields, taskBuffer, row)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void RenderActorTableRow(
+    const ActorTableRow& row,
+    std::string_view taskText,
+    RE::Actor* actor,
+    int followDepth,
+    bool hideTaskColumn) {
     static char nameEditBuffer[256] = {};
 
     ImGuiMCP::TableNextRow();
     ImGuiMCP::TableSetColumnIndex(0);
+
+    const float indentAmount = followDepth > 0
+        ? static_cast<float>(followDepth) * ImGuiMCP::GetStyle()->IndentSpacing
+        : 0.0f;
+    if (indentAmount > 0.0f) {
+        ImGuiMCP::Indent(indentAmount);
+    }
+
     ImGuiMCP::PushID(static_cast<int>(actor->GetFormID()));
     const ImGuiMCP::ImGuiID nameFieldId = ImGuiMCP::GetID("##ActorName");
     if (ImGuiMCP::GetActiveID() != nameFieldId) {
@@ -150,6 +219,11 @@ static void RenderActorTableRow(const ActorTableRow& row, std::string_view taskT
         }
     }
     ImGuiMCP::PopID();
+
+    if (indentAmount > 0.0f) {
+        ImGuiMCP::Unindent(indentAmount);
+    }
+
     ImGuiMCP::TableSetColumnIndex(1);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.idHex));
     ImGuiMCP::TableSetColumnIndex(2);
@@ -163,7 +237,9 @@ static void RenderActorTableRow(const ActorTableRow& row, std::string_view taskT
     ImGuiMCP::TableSetColumnIndex(6);
     ImGuiMCP::Text("%.2f", row.distance);
     ImGuiMCP::TableSetColumnIndex(7);
-    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(taskText));
+    if (!hideTaskColumn) {
+        ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(taskText));
+    }
     ImGuiMCP::TableSetColumnIndex(8);
     ImGuiMCP::PushID(static_cast<int>(actor->GetFormID()));
     const float deleteButtonSize = ImGuiMCP::GetFrameHeight();
@@ -176,6 +252,35 @@ static void RenderActorTableRow(const ActorTableRow& row, std::string_view taskT
         );
     }
     ImGuiMCP::PopID();
+}
+
+static void RenderFollowSubtree(
+    RE::Actor* actor,
+    int followDepth,
+    const FollowChildrenMap& followChildrenByParent,
+    bool fillExpensiveFields,
+    std::string& taskBuffer,
+    ActorTableRow& row) {
+    PopulateActorTableRow(actor, nullptr, row);
+
+    std::string_view taskDisplay = row.task;
+    if (followDepth == 0) {
+        taskBuffer.clear();
+        Utility::CreateTaskDescription(actor, taskBuffer);
+        taskDisplay = taskBuffer;
+    }
+
+    const bool hideTaskColumn = followDepth > 0;
+    RenderActorTableRow(row, taskDisplay, actor, followDepth, hideTaskColumn);
+
+    const auto childrenIt = followChildrenByParent.find(actor);
+    if (childrenIt == followChildrenByParent.end()) {
+        return;
+    }
+
+    for (RE::Actor* child : childrenIt->second) {
+        RenderFollowSubtree(child, followDepth + 1, followChildrenByParent, fillExpensiveFields, taskBuffer, row);
+    }
 }
 
 void __stdcall UI::ActorListView::Render() {
@@ -193,6 +298,16 @@ void __stdcall UI::ActorListView::Render() {
     JC::ObjectId actorDb = JC::GetActorDb();
     if (actorDb == 0) {
         ImGuiMCP::Text("No actor database found");
+        return;
+    }
+
+    RE::TESDataHandler* dh = RE::TESDataHandler::GetSingleton();
+    if (!dh) {
+        return;
+    }
+
+    static auto* BRSS_PackageKeyword1 = dh->LookupForm<RE::BGSKeyword>(0xAA0F, "SkyrimSlavery.esp");
+    if (!BRSS_PackageKeyword1) {
         return;
     }
 
@@ -220,6 +335,33 @@ void __stdcall UI::ActorListView::Render() {
     ImGuiMCP::Spacing();
 
     const bool applyFilter = tokenizeResult.ok && parseResult.hasExpression;
+    const bool fillExpensiveFields = applyFilter && filterUsesExpensiveField;
+
+    alignas(std::max_align_t) static std::array<std::byte, 2 * 1024 * 1024> followGraphBuffer;
+    std::pmr::monotonic_buffer_resource followGraphPool{
+        followGraphBuffer.data(),
+        followGraphBuffer.size(),
+        std::pmr::null_memory_resource()
+    };
+    FollowChildrenMap followChildrenByParent{ &followGraphPool };
+    FollowChildSet followChildSet{ &followGraphPool };
+    followChildrenByParent.reserve(4096);
+    followChildSet.reserve(4096);
+
+    RE::TESForm* currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, nullptr, nullptr);
+    while (currentForm) {
+        RE::Actor* currentActor = currentForm->As<RE::Actor>();
+        if (currentActor) {
+            RE::Actor* parent = GetFollowParentInActorDb(currentActor, BRSS_PackageKeyword1, actorDb);
+            if (parent) {
+                followChildrenByParent[parent].push_back(currentActor);
+                followChildSet.insert(currentActor);
+            }
+        }
+        currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, currentForm, nullptr);
+    }
+
+    ActorTableRow row = {};
 
     constexpr ImGuiMCP::ImGuiTableFlags tableFlags = ImGuiMCP::ImGuiTableFlags_Resizable |
                                                      ImGuiMCP::ImGuiTableFlags_RowBg |
@@ -237,33 +379,18 @@ void __stdcall UI::ActorListView::Render() {
         ImGuiMCP::TableSetupColumn("", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, deleteColumnWidth);
         ImGuiMCP::TableHeadersRow();
 
-        RE::TESForm* currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, nullptr, nullptr);
+        currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, nullptr, nullptr);
         while (currentForm) {
             RE::Actor* currentActor = currentForm->As<RE::Actor>();
-            if (!currentActor) {
-                currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, currentForm, nullptr);
-                continue;
+            if (currentActor && followChildSet.find(currentActor) == followChildSet.end()) {
+                if (!applyFilter ||
+                    FollowSubtreeMatchesFilter(currentActor, followChildrenByParent, parseResult, fillExpensiveFields, taskBuffer, row)) {
+                    RenderFollowSubtree(currentActor, 0, followChildrenByParent, fillExpensiveFields, taskBuffer, row);
+                }
             }
-
-            ActorTableRow row = {};
-            const bool fillExpensiveFields = applyFilter && filterUsesExpensiveField;
-            PopulateActorTableRow(currentActor, fillExpensiveFields ? &taskBuffer : nullptr, row);
-
-            if (applyFilter && !FilterMatchesExpression(parseResult, &row, kActorFilterSchema, kActorFilterRowAccess)) {
-                currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, currentForm, nullptr);
-                continue;
-            }
-
-            std::string_view taskDisplay = row.task;
-            if (!fillExpensiveFields) {
-                taskBuffer.clear();
-                Utility::CreateTaskDescription(currentActor, taskBuffer);
-                taskDisplay = taskBuffer;
-            }
-            RenderActorTableRow(row, taskDisplay, currentActor);
-
             currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, currentForm, nullptr);
         }
+
         ImGuiMCP::EndTable();
     }
 }
