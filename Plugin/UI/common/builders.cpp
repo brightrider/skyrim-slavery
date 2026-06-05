@@ -27,7 +27,9 @@ void PopulateActorTableRow(RE::Actor* actor, std::string* taskBuf, ActorTableRow
         }
     }
 
-    out.isChild = actor->IsChild();
+    static constexpr char kActorAgeAdult[] = "Adult";
+    static constexpr char kActorAgeChild[] = "Child";
+    out.age = actor->IsChild() ? std::string_view(kActorAgeChild) : std::string_view(kActorAgeAdult);
     out.status = actor->IsDead() ? "Dead" : "Alive";
 
     if (const RE::BGSLocation* location = actor->GetCurrentLocation()) {
@@ -86,6 +88,10 @@ void PopulateMarkerTableRow(RE::TESObjectREFR* marker, float distance, MarkerTab
         out.idHex = "unknown";
     }
 
+    if (const RE::TESBoundObject* base = marker->GetBaseObject()) {
+        out.type = RE::FormTypeToString(base->GetFormType());
+    }
+
     const char* desc = marker->GetDisplayFullName();
     if (!desc || desc[0] == '\0' || std::strstr(desc, "not be visible")) {
         if (const RE::TESBoundObject* base = marker->GetBaseObject()) {
@@ -119,6 +125,8 @@ void FormatMarkerDescription(const MarkerTableRow& row, std::string& buf) {
     buf.append(row.jcName.empty() ? "unknown" : row.jcName.data());
     buf.append("[");
     buf.append(row.idHex.empty() ? "unknown" : row.idHex.data());
+    buf.append(", ");
+    buf.append(row.type.empty() ? "unknown" : row.type.data());
     buf.append(", ");
     buf.append(row.description.empty() ? "unknown" : row.description.data());
     buf.append(", ");

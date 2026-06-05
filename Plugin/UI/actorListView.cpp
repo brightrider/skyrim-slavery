@@ -23,7 +23,7 @@ enum class ActorFilterField : std::uint8_t {
     Name,
     Id,
     Type,
-    Child,
+    Age,
     Status,
     Location,
     Distance,
@@ -33,7 +33,7 @@ enum class ActorFilterField : std::uint8_t {
 static constexpr const char* kNameAliases[] = { "name", "na" };
 static constexpr const char* kIdAliases[] = { "id" };
 static constexpr const char* kTypeAliases[] = { "type", "ty" };
-static constexpr const char* kChildAliases[] = { "child", "ch" };
+static constexpr const char* kAgeAliases[] = { "age", "ag" };
 static constexpr const char* kStatusAliases[] = { "status", "st" };
 static constexpr const char* kLocationAliases[] = { "location", "lo" };
 static constexpr const char* kDistanceAliases[] = { "distance", "di" };
@@ -43,14 +43,30 @@ static constexpr FilterFieldSpec kActorFilterFields[] = {
     { static_cast<std::uint8_t>(ActorFilterField::Name), FilterFieldKind::Text, kNameAliases, std::size(kNameAliases), false },
     { static_cast<std::uint8_t>(ActorFilterField::Id), FilterFieldKind::Text, kIdAliases, std::size(kIdAliases), false },
     { static_cast<std::uint8_t>(ActorFilterField::Type), FilterFieldKind::Text, kTypeAliases, std::size(kTypeAliases), false },
-    { static_cast<std::uint8_t>(ActorFilterField::Child), FilterFieldKind::Bool, kChildAliases, std::size(kChildAliases), false },
+    { static_cast<std::uint8_t>(ActorFilterField::Age), FilterFieldKind::Text, kAgeAliases, std::size(kAgeAliases), false },
     { static_cast<std::uint8_t>(ActorFilterField::Status), FilterFieldKind::Text, kStatusAliases, std::size(kStatusAliases), false },
     { static_cast<std::uint8_t>(ActorFilterField::Location), FilterFieldKind::Text, kLocationAliases, std::size(kLocationAliases), false },
     { static_cast<std::uint8_t>(ActorFilterField::Distance), FilterFieldKind::Number, kDistanceAliases, std::size(kDistanceAliases), false },
     { static_cast<std::uint8_t>(ActorFilterField::Task), FilterFieldKind::Text, kTaskAliases, std::size(kTaskAliases), true },
 };
 
-static constexpr FilterSchema kActorFilterSchema{ kActorFilterFields, std::size(kActorFilterFields) };
+static constexpr std::uint8_t kActorTextShorthandFieldIds[] = {
+    static_cast<std::uint8_t>(ActorFilterField::Name),
+    static_cast<std::uint8_t>(ActorFilterField::Id),
+    static_cast<std::uint8_t>(ActorFilterField::Type),
+    static_cast<std::uint8_t>(ActorFilterField::Age),
+    static_cast<std::uint8_t>(ActorFilterField::Status),
+    static_cast<std::uint8_t>(ActorFilterField::Location),
+    static_cast<std::uint8_t>(ActorFilterField::Task),
+};
+
+static constexpr FilterShorthandConfig kActorFilterShorthand{
+    static_cast<std::uint8_t>(ActorFilterField::Distance),
+    { kActorTextShorthandFieldIds, std::size(kActorTextShorthandFieldIds) },
+    {},
+};
+
+static constexpr FilterSchema kActorFilterSchema{ kActorFilterFields, std::size(kActorFilterFields), kActorFilterShorthand };
 
 static std::string_view ActorFilterRowText(const void* rowContext, std::uint8_t fieldId);
 static bool ActorFilterRowBool(const void* rowContext, std::uint8_t fieldId);
@@ -144,6 +160,8 @@ static std::string_view ActorFilterRowText(const void* rowContext, std::uint8_t 
         return row.idHex;
     case ActorFilterField::Type:
         return row.type;
+    case ActorFilterField::Age:
+        return row.age;
     case ActorFilterField::Status:
         return row.status;
     case ActorFilterField::Location:
@@ -156,13 +174,9 @@ static std::string_view ActorFilterRowText(const void* rowContext, std::uint8_t 
 }
 
 static bool ActorFilterRowBool(const void* rowContext, std::uint8_t fieldId) {
-    const auto& row = *static_cast<const ActorTableRow*>(rowContext);
-    switch (static_cast<ActorFilterField>(fieldId)) {
-    case ActorFilterField::Child:
-        return row.isChild;
-    default:
-        return false;
-    }
+    (void)rowContext;
+    (void)fieldId;
+    return false;
 }
 
 static float ActorFilterRowNumber(const void* rowContext, std::uint8_t fieldId) {
@@ -280,7 +294,7 @@ static void RenderActorTableRow(
     ImGuiMCP::TableSetColumnIndex(2);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.type));
     ImGuiMCP::TableSetColumnIndex(3);
-    ImGuiMCP::TextUnformatted(row.isChild ? "Yes" : "No");
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.age));
     ImGuiMCP::TableSetColumnIndex(4);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.status));
     ImGuiMCP::TableSetColumnIndex(5);
@@ -410,13 +424,13 @@ void __stdcall UI::ActorListView::Render() {
     ImGuiMCP::InputTextWithHint("##ActorListFilter", "Filter...", filterBuffer, sizeof(filterBuffer));
     AcceptActorRowDragDropAtTarget(nullptr);
     ImGuiMCP::TextDisabled(
-        "Ctrl+L: focus filter  |  e.g. name contains lydia and di < 1000 or not child  |  not, ==, contains(ct), startswith(sw), endswith(ew), <, >  |  a or b and c = a or (b and c)  |  \"quotes for spaces\"");
+        "Ctrl+L: focus filter  |  e.g. lydia 1000 or name ct lydia and ag ct child  |  not, ==, contains(ct), startswith(sw), endswith(ew), <, >  |  a or b and c = a or (b and c)  |  \"quotes for spaces\"");
     AcceptActorRowDragDropAtTarget(nullptr);
     if (std::strcmp(filterBuffer, lastTokenizedFilter) != 0) {
         strncpy_s(lastTokenizedFilter, filterBuffer, sizeof(lastTokenizedFilter));
         lastTokenizedFilter[sizeof(lastTokenizedFilter) - 1] = '\0';
         FilterTokenize(filterBuffer, tokenizeResult);
-        FilterParseExpression(tokenizeResult, parseResult, kActorFilterSchema);
+        FilterParseExpression(filterBuffer, tokenizeResult, parseResult, kActorFilterSchema);
         filterUsesExpensiveField = FilterExpressionUsesExpensiveField(parseResult, kActorFilterSchema);
     }
     if (!parseResult.ok && parseResult.error[0] != '\0') {
@@ -425,7 +439,7 @@ void __stdcall UI::ActorListView::Render() {
     ImGuiMCP::Spacing();
     AcceptActorRowDragDropAtTarget(nullptr);
 
-    const bool applyFilter = tokenizeResult.ok && parseResult.hasExpression;
+    const bool applyFilter = parseResult.ok && parseResult.hasExpression;
     const bool fillExpensiveFields = applyFilter && filterUsesExpensiveField;
 
     alignas(std::max_align_t) static std::array<std::byte, 2 * 1024 * 1024> followGraphBuffer;
@@ -469,7 +483,7 @@ void __stdcall UI::ActorListView::Render() {
             ImGuiMCP::TableSetupColumn("Name", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 300.0f);
             ImGuiMCP::TableSetupColumn("ID");
             ImGuiMCP::TableSetupColumn("Type");
-            ImGuiMCP::TableSetupColumn("Child");
+            ImGuiMCP::TableSetupColumn("Age");
             ImGuiMCP::TableSetupColumn("Status");
             ImGuiMCP::TableSetupColumn("Location");
             ImGuiMCP::TableSetupColumn("Distance");

@@ -17,7 +17,7 @@ enum class ActorSelectorFilterField : std::uint8_t {
     Name,
     Id,
     Type,
-    Child,
+    Age,
     Status,
     Location,
     Distance,
@@ -26,7 +26,7 @@ enum class ActorSelectorFilterField : std::uint8_t {
 static constexpr const char* kNameAliases[] = { "name", "na" };
 static constexpr const char* kIdAliases[] = { "id" };
 static constexpr const char* kTypeAliases[] = { "type", "ty" };
-static constexpr const char* kChildAliases[] = { "child", "ch" };
+static constexpr const char* kAgeAliases[] = { "age", "ag" };
 static constexpr const char* kStatusAliases[] = { "status", "st" };
 static constexpr const char* kLocationAliases[] = { "location", "lo" };
 static constexpr const char* kDistanceAliases[] = { "distance", "di" };
@@ -35,13 +35,32 @@ static constexpr FilterFieldSpec kActorSelectorFilterFields[] = {
     { static_cast<std::uint8_t>(ActorSelectorFilterField::Name), FilterFieldKind::Text, kNameAliases, std::size(kNameAliases), false },
     { static_cast<std::uint8_t>(ActorSelectorFilterField::Id), FilterFieldKind::Text, kIdAliases, std::size(kIdAliases), false },
     { static_cast<std::uint8_t>(ActorSelectorFilterField::Type), FilterFieldKind::Text, kTypeAliases, std::size(kTypeAliases), false },
-    { static_cast<std::uint8_t>(ActorSelectorFilterField::Child), FilterFieldKind::Bool, kChildAliases, std::size(kChildAliases), false },
+    { static_cast<std::uint8_t>(ActorSelectorFilterField::Age), FilterFieldKind::Text, kAgeAliases, std::size(kAgeAliases), false },
     { static_cast<std::uint8_t>(ActorSelectorFilterField::Status), FilterFieldKind::Text, kStatusAliases, std::size(kStatusAliases), false },
     { static_cast<std::uint8_t>(ActorSelectorFilterField::Location), FilterFieldKind::Text, kLocationAliases, std::size(kLocationAliases), false },
     { static_cast<std::uint8_t>(ActorSelectorFilterField::Distance), FilterFieldKind::Number, kDistanceAliases, std::size(kDistanceAliases), false },
 };
 
-static constexpr FilterSchema kActorSelectorFilterSchema{ kActorSelectorFilterFields, std::size(kActorSelectorFilterFields) };
+static constexpr std::uint8_t kActorSelectorTextShorthandFieldIds[] = {
+    static_cast<std::uint8_t>(ActorSelectorFilterField::Name),
+    static_cast<std::uint8_t>(ActorSelectorFilterField::Id),
+    static_cast<std::uint8_t>(ActorSelectorFilterField::Type),
+    static_cast<std::uint8_t>(ActorSelectorFilterField::Age),
+    static_cast<std::uint8_t>(ActorSelectorFilterField::Status),
+    static_cast<std::uint8_t>(ActorSelectorFilterField::Location),
+};
+
+static constexpr FilterShorthandConfig kActorSelectorFilterShorthand{
+    static_cast<std::uint8_t>(ActorSelectorFilterField::Distance),
+    { kActorSelectorTextShorthandFieldIds, std::size(kActorSelectorTextShorthandFieldIds) },
+    {},
+};
+
+static constexpr FilterSchema kActorSelectorFilterSchema{
+    kActorSelectorFilterFields,
+    std::size(kActorSelectorFilterFields),
+    kActorSelectorFilterShorthand,
+};
 
 static std::unordered_set<RE::Actor*> g_pendingSelection;
 static std::vector<RE::Actor*> g_confirmedActors;
@@ -124,6 +143,8 @@ static std::string_view ActorSelectorFilterRowText(const void* rowContext, std::
         return row.idHex;
     case ActorSelectorFilterField::Type:
         return row.type;
+    case ActorSelectorFilterField::Age:
+        return row.age;
     case ActorSelectorFilterField::Status:
         return row.status;
     case ActorSelectorFilterField::Location:
@@ -134,13 +155,9 @@ static std::string_view ActorSelectorFilterRowText(const void* rowContext, std::
 }
 
 static bool ActorSelectorFilterRowBool(const void* rowContext, std::uint8_t fieldId) {
-    const auto& row = *static_cast<const ActorTableRow*>(rowContext);
-    switch (static_cast<ActorSelectorFilterField>(fieldId)) {
-    case ActorSelectorFilterField::Child:
-        return row.isChild;
-    default:
-        return false;
-    }
+    (void)rowContext;
+    (void)fieldId;
+    return false;
 }
 
 static float ActorSelectorFilterRowNumber(const void* rowContext, std::uint8_t fieldId) {
@@ -162,6 +179,20 @@ static const FilterRowAccess kActorSelectorFilterRowAccess{
 static bool CachedEntryMatchesFilter(const ActorSelectorCachedEntry& entry, const FilterParseResult& parseResult) {
     return FilterMatchesExpression(
         parseResult, &entry.row, kActorSelectorFilterSchema, kActorSelectorFilterRowAccess);
+}
+
+static bool ActorSelectorFilterIsNonEmpty() {
+    return g_filterBuffer[0] != '\0';
+}
+
+static void CollectVisibleActors(std::vector<RE::Actor*>& outActors, bool applyFilter) {
+    outActors.clear();
+    outActors.reserve(g_cachedActors.size());
+    for (const ActorSelectorCachedEntry& entry : g_cachedActors) {
+        if (!applyFilter || CachedEntryMatchesFilter(entry, g_parseResult)) {
+            outActors.push_back(entry.actor);
+        }
+    }
 }
 
 static void UpdateSelectionOnRowClick(RE::Actor* actor) {
@@ -197,7 +228,7 @@ static void RenderActorSelectorTableRow(const ActorTableRow& row, RE::Actor* act
     ImGuiMCP::TableSetColumnIndex(2);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.type));
     ImGuiMCP::TableSetColumnIndex(3);
-    ImGuiMCP::TextUnformatted(row.isChild ? "Yes" : "No");
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.age));
     ImGuiMCP::TableSetColumnIndex(4);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.status));
     ImGuiMCP::TableSetColumnIndex(5);
@@ -291,13 +322,12 @@ void __stdcall UI::ActorSelector::Render() {
     }
     ImGuiMCP::SetNextItemWidth(-1.0f);
     ImGuiMCP::InputTextWithHint("##ActorSelectorFilter", "Filter...", g_filterBuffer, sizeof(g_filterBuffer));
-    ImGuiMCP::TextDisabled(
-        "Ctrl+L: focus filter | Ctrl+Q: cancel  |  e.g. name contains lydia and di < 1000 or not child  |  not, ==, contains(ct), startswith(sw), endswith(ew), <, >  |  a or b and c = a or (b and c)  |  \"quotes for spaces\"");
+    ImGuiMCP::TextDisabled("Ctrl+L: focus filter | Ctrl+Enter: select all visible | Ctrl+Q: cancel");
     if (std::strcmp(g_filterBuffer, g_lastTokenizedFilter) != 0) {
         strncpy_s(g_lastTokenizedFilter, g_filterBuffer, sizeof(g_lastTokenizedFilter));
         g_lastTokenizedFilter[sizeof(g_lastTokenizedFilter) - 1] = '\0';
         FilterTokenize(g_filterBuffer, g_tokenizeResult);
-        FilterParseExpression(g_tokenizeResult, g_parseResult, kActorSelectorFilterSchema);
+        FilterParseExpression(g_filterBuffer, g_tokenizeResult, g_parseResult, kActorSelectorFilterSchema);
 
         const float referenceSearchRadius = FilterGetLessUpperBound(
             g_parseResult,
@@ -315,7 +345,7 @@ void __stdcall UI::ActorSelector::Render() {
     ImGuiMCP::TextDisabled("Selected: %zu", g_pendingSelection.size());
     ImGuiMCP::Spacing();
 
-    const bool applyFilter = g_tokenizeResult.ok && g_parseResult.hasExpression;
+    const bool applyFilter = g_parseResult.ok && g_parseResult.hasExpression;
 
     ImGuiMCP::ImVec2 tableAvail{};
     ImGuiMCP::GetContentRegionAvail(&tableAvail);
@@ -333,7 +363,7 @@ void __stdcall UI::ActorSelector::Render() {
             ImGuiMCP::TableSetupColumn("Name", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 300.0f);
             ImGuiMCP::TableSetupColumn("ID");
             ImGuiMCP::TableSetupColumn("Type");
-            ImGuiMCP::TableSetupColumn("Child");
+            ImGuiMCP::TableSetupColumn("Age");
             ImGuiMCP::TableSetupColumn("Status");
             ImGuiMCP::TableSetupColumn("Location");
             ImGuiMCP::TableSetupColumn("Distance");
@@ -355,11 +385,19 @@ void __stdcall UI::ActorSelector::Render() {
     }
 
     constexpr ImGuiMCP::ImGuiInputFlags kConfirmInputRoute = ImGuiMCP::ImGuiInputFlags_RouteGlobal;
-    const bool confirmPressed = ImGuiMCP::Shortcut(ImGuiMCP::ImGuiKey_Enter, kConfirmInputRoute) ||
-        ImGuiMCP::Shortcut(ImGuiMCP::ImGuiKey_KeypadEnter, kConfirmInputRoute);
+    const bool confirmAllVisiblePressed =
+        ImGuiMCP::Shortcut(ImGuiMCP::ImGuiMod_Ctrl | ImGuiMCP::ImGuiKey_Enter, kConfirmInputRoute) ||
+        ImGuiMCP::Shortcut(ImGuiMCP::ImGuiMod_Ctrl | ImGuiMCP::ImGuiKey_KeypadEnter, kConfirmInputRoute);
+    const bool confirmPressed = !confirmAllVisiblePressed && !(io && io->KeyCtrl) &&
+        (ImGuiMCP::Shortcut(ImGuiMCP::ImGuiKey_Enter, kConfirmInputRoute) ||
+            ImGuiMCP::Shortcut(ImGuiMCP::ImGuiKey_KeypadEnter, kConfirmInputRoute));
     const bool escPressed = ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Escape, false);
 
-    if (confirmPressed) {
+    if (confirmAllVisiblePressed && ActorSelectorFilterIsNonEmpty()) {
+        CollectVisibleActors(g_confirmedActors, applyFilter);
+        g_hasConfirmedSelection = true;
+        closeWindow = true;
+    } else if (confirmPressed) {
         if (!g_pendingSelection.empty()) {
             g_confirmedActors.assign(g_pendingSelection.begin(), g_pendingSelection.end());
         } else if (applyFilter && visibleRowCount == 1 && singleVisibleActor) {

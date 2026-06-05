@@ -12,16 +12,10 @@ struct FormSelectorEntry {
     RE::TESForm* form = nullptr;
     std::uint8_t typeFilterValue = 0;
     std::string label;
+    std::string matchText;
 };
 
-static RE::TESForm* g_selectedForm = nullptr;
-static bool g_hasSelectedForm = false;
-static RE::TESForm* g_pendingForm = nullptr;
-
-static std::vector<FormSelectorEntry> g_entries;
-static bool g_entriesBuilt = false;
-static char g_filterBuffer[256] = {};
-static bool g_focusFilterOnOpen = false;
+constexpr std::size_t kFormSelectorMaxFilterWords = 32;
 
 enum FormTypeFilter : std::uint8_t {
     kFilterAll = 0,
@@ -32,6 +26,20 @@ enum FormTypeFilter : std::uint8_t {
     kFilterCONT,
     kFilterIDLM
 };
+
+static RE::TESForm* g_selectedForm = nullptr;
+static bool g_hasSelectedForm = false;
+static RE::TESForm* g_pendingForm = nullptr;
+
+static std::vector<FormSelectorEntry> g_entries;
+static bool g_entriesBuilt = false;
+static char g_filterBuffer[256] = {};
+static char g_lastParsedFilter[256] = {};
+static char g_parsedTextFilter[256] = {};
+static std::uint8_t g_cachedTypeFilter = kFilterAll;
+static std::size_t g_filterWordCount = 0;
+static const char* g_filterWords[kFormSelectorMaxFilterWords] = {};
+static bool g_focusFilterOnOpen = false;
 
 static const char* ResolveEditorId(RE::TESForm* form) {
     const char* editorId = Utility::GetFormEditorID(form->GetFormID());
@@ -46,12 +54,17 @@ static const char* ResolveDisplayName(RE::TESForm* form) {
     return name;
 }
 
-static void AppendLabel(std::string& label, const char* typeTag, const char* editorId, const char* name) {
+static void AppendEntryStrings(std::string& label, std::string& matchText, const char* typeTag, const char* editorId, const char* name) {
+    const char* const id = editorId ? editorId : "?";
+    const char* const displayName = name ? name : "?";
+
+    matchText = id;
+    matchText.append(" | ");
+    matchText.append(displayName);
+
     label = typeTag;
     label.append(" | ");
-    label.append(editorId ? editorId : "?");
-    label.append(" | ");
-    label.append(name ? name : "?");
+    label.append(matchText);
 }
 
 template <typename T>
@@ -66,7 +79,7 @@ static void AppendFormArray(RE::TESDataHandler* dh, const char* typeTag, std::ui
         FormSelectorEntry entry;
         entry.form = form;
         entry.typeFilterValue = typeFilterValue;
-        AppendLabel(entry.label, typeTag, ResolveEditorId(form), ResolveDisplayName(form));
+        AppendEntryStrings(entry.label, entry.matchText, typeTag, ResolveEditorId(form), ResolveDisplayName(form));
         g_entries.push_back(std::move(entry));
     }
 }
@@ -82,7 +95,7 @@ static void AppendFormArrayByType(RE::TESDataHandler* dh, RE::FormType formType,
         FormSelectorEntry entry;
         entry.form = form;
         entry.typeFilterValue = typeFilterValue;
-        AppendLabel(entry.label, typeTag, ResolveEditorId(form), ResolveDisplayName(form));
+        AppendEntryStrings(entry.label, entry.matchText, typeTag, ResolveEditorId(form), ResolveDisplayName(form));
         g_entries.push_back(std::move(entry));
     }
 }
@@ -161,15 +174,64 @@ static std::uint8_t ParseTypePrefix(const char*& filterText) {
     return kFilterAll;
 }
 
-static bool MatchesFilter(const FormSelectorEntry& entry, std::uint8_t typeFilter, const char* textFilter) {
-    if (typeFilter != kFilterAll && entry.typeFilterValue != typeFilter) {
+static void RebuildCachedFilterWords() {
+    g_cachedTypeFilter = kFilterAll;
+    g_filterWordCount = 0;
+
+    strncpy_s(g_parsedTextFilter, g_filterBuffer, sizeof(g_parsedTextFilter));
+    g_parsedTextFilter[sizeof(g_parsedTextFilter) - 1] = '\0';
+
+    const char* text = g_parsedTextFilter;
+    g_cachedTypeFilter = ParseTypePrefix(text);
+    text = SkipSpaces(text);
+    if (!text || text[0] == '\0') {
+        return;
+    }
+
+    char* cursor = g_parsedTextFilter + (text - g_parsedTextFilter);
+    while (*cursor != '\0') {
+        while (*cursor == ' ') {
+            ++cursor;
+        }
+        if (*cursor == '\0') {
+            break;
+        }
+
+        if (g_filterWordCount >= kFormSelectorMaxFilterWords) {
+            g_filterWordCount = 0;
+            return;
+        }
+
+        g_filterWords[g_filterWordCount++] = cursor;
+        while (*cursor != '\0' && *cursor != ' ') {
+            ++cursor;
+        }
+        if (*cursor == '\0') {
+            break;
+        }
+        *cursor = '\0';
+        ++cursor;
+    }
+}
+
+static bool MatchesFilter(const FormSelectorEntry& entry) {
+    if (g_cachedTypeFilter != kFilterAll && entry.typeFilterValue != g_cachedTypeFilter) {
         return false;
     }
-    textFilter = SkipSpaces(textFilter);
-    if (!textFilter || textFilter[0] == '\0') {
+    if (g_filterWordCount == 0) {
         return true;
     }
-    return StrStrIA(entry.label.c_str(), textFilter) != nullptr;
+
+    for (std::size_t i = 0; i < g_filterWordCount; ++i) {
+        const char* const word = g_filterWords[i];
+        if (word == nullptr || word[0] == '\0') {
+            continue;
+        }
+        if (StrStrIA(entry.matchText.c_str(), word) == nullptr) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void UI::FormSelector::Open() {
@@ -223,8 +285,11 @@ void __stdcall UI::FormSelector::Render() {
     ImGuiMCP::TextDisabled("Ctrl+L: focus filter | Ctrl+Q: cancel | Prefix: acti:/stat:/mstt:/furn:/cont:/idlm:");
     ImGuiMCP::Spacing();
 
-    const char* textFilter = g_filterBuffer;
-    const std::uint8_t typeFilter = ParseTypePrefix(textFilter);
+    if (std::strcmp(g_filterBuffer, g_lastParsedFilter) != 0) {
+        strncpy_s(g_lastParsedFilter, g_filterBuffer, sizeof(g_lastParsedFilter));
+        g_lastParsedFilter[sizeof(g_lastParsedFilter) - 1] = '\0';
+        RebuildCachedFilterWords();
+    }
 
     bool closeWindow = false;
     std::size_t visibleCount = 0;
@@ -233,7 +298,7 @@ void __stdcall UI::FormSelector::Render() {
     ImGuiMCP::GetContentRegionAvail(&avail);
     if (ImGuiMCP::BeginChild("##FormSelectorList", ImGuiMCP::ImVec2{0.0f, avail.y}, 0)) {
         for (const FormSelectorEntry& entry : g_entries) {
-            if (!MatchesFilter(entry, typeFilter, textFilter)) {
+            if (!MatchesFilter(entry)) {
                 continue;
             }
             ++visibleCount;

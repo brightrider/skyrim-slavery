@@ -8,7 +8,7 @@ struct ActorTableRow {
     std::string_view status = {};
     std::string_view location = {};
     std::string_view task = {};
-    bool isChild = false;
+    std::string_view age = {};
     float distance = 0.0f;
 };
 
@@ -19,6 +19,7 @@ struct MarkerTableRow {
     RE::BSFixedString jcNameStorage;
     std::string_view jcName = {};
     std::string_view idHex = {};
+    std::string_view type = {};
     std::string_view description = {};
     std::string_view location = {};
     float distance = 0.0f;

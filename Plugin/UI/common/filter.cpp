@@ -1,10 +1,13 @@
 #include "filter.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cstring>
 #include <limits>
 
 static bool FilterMatchTextOp(FilterOp op, std::string_view fieldText, std::string_view needle);
 static bool FilterMatchFloatOp(FilterOp op, float value, double threshold);
+static bool FilterContainsIgnoreCase(std::string_view text, std::string_view needle);
 
 static bool FilterCharEqualsIgnoreCase(char a, char b) {
     return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
@@ -568,7 +571,241 @@ static bool FilterParseExpressionPartial(const FilterTokenizeResult& tokens, Fil
     return true;
 }
 
-bool FilterParseExpression(const FilterTokenizeResult& tokens, FilterParseResult& out, const FilterSchema& schema) {
+static std::string_view FilterTrimInput(std::string_view input) {
+    while (!input.empty() && std::isspace(static_cast<unsigned char>(input.front()))) {
+        input.remove_prefix(1);
+    }
+    while (!input.empty() && std::isspace(static_cast<unsigned char>(input.back()))) {
+        input.remove_suffix(1);
+    }
+    return input;
+}
+
+static bool FilterShorthandConfigured(const FilterShorthandConfig& shorthand) {
+    return shorthand.numberLessFieldId != 0 || shorthand.primaryText.fieldCount > 0;
+}
+
+static void FilterResetShorthandGroups(FilterParseResult& out) {
+    out.shorthandGroupCount = 0;
+}
+
+static bool FilterShorthandGroupHasContent(const FilterShorthandGroup& group) {
+    return group.wordCount > 0 || group.hasLessBound;
+}
+
+static bool FilterTryPushShorthandWord(FilterShorthandGroup& group, std::string_view word, bool quoted, bool negated) {
+    word = FilterTrimInput(word);
+    if (word.empty()) {
+        return true;
+    }
+    if (group.wordCount >= std::size(group.words)) {
+        return false;
+    }
+    group.words[group.wordCount] = FilterShorthandWord{ word, quoted, negated };
+    ++group.wordCount;
+    return true;
+}
+
+static bool FilterIsShorthandComparisonToken(FilterTokenKind kind) {
+    return kind == FilterTokenKind::Equals || kind == FilterTokenKind::Less || kind == FilterTokenKind::Greater ||
+        kind == FilterTokenKind::LessEqual || kind == FilterTokenKind::GreaterEqual;
+}
+
+static bool FilterTokensAreShorthandCompatible(const FilterTokenizeResult& tokens) {
+    if (!tokens.ok) {
+        return false;
+    }
+    for (std::size_t i = 0; i < tokens.count; ++i) {
+        if (FilterIsShorthandComparisonToken(tokens.tokens[i].kind)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool FilterIsShorthandWordToken(FilterTokenKind kind) {
+    return kind == FilterTokenKind::Identifier || kind == FilterTokenKind::String || kind == FilterTokenKind::Number ||
+        kind == FilterTokenKind::And;
+}
+
+static bool FilterParseShorthandAndGroup(const FilterTokenizeResult& tokens, std::size_t& ioIndex, FilterShorthandGroup& group,
+    bool allowPartial) {
+    group = {};
+
+    while (ioIndex < tokens.count) {
+        if (tokens.tokens[ioIndex].kind == FilterTokenKind::Or) {
+            break;
+        }
+
+        bool negated = false;
+        if (tokens.tokens[ioIndex].kind == FilterTokenKind::Not) {
+            negated = true;
+            ++ioIndex;
+            if (ioIndex >= tokens.count) {
+                return allowPartial && FilterShorthandGroupHasContent(group);
+            }
+        }
+
+        const FilterToken& tok = tokens.tokens[ioIndex];
+        if (tok.kind == FilterTokenKind::Or || tok.kind == FilterTokenKind::Not) {
+            return false;
+        }
+        if (!FilterIsShorthandWordToken(tok.kind)) {
+            return false;
+        }
+
+        if (tok.kind == FilterTokenKind::Number && !negated && !group.hasLessBound) {
+            double value = 0.0;
+            if (FilterTryParseDouble(tok.lexeme, value)) {
+                group.hasLessBound = true;
+                group.lessBound = value;
+                ++ioIndex;
+                continue;
+            }
+        }
+
+        const std::string_view word = tok.kind == FilterTokenKind::And ? std::string_view("and") : tok.lexeme;
+        const bool quoted = tok.kind == FilterTokenKind::String;
+        if (!FilterTryPushShorthandWord(group, word, quoted, negated)) {
+            return false;
+        }
+        ++ioIndex;
+    }
+
+    return FilterShorthandGroupHasContent(group);
+}
+
+static bool FilterParseShorthandExpression(const FilterTokenizeResult& tokens, FilterParseResult& out, bool allowPartial) {
+    if (!FilterTokensAreShorthandCompatible(tokens) || tokens.count == 0) {
+        return false;
+    }
+
+    out.shorthandGroupCount = 0;
+
+    std::size_t i = 0;
+    FilterShorthandGroup group = {};
+    if (!FilterParseShorthandAndGroup(tokens, i, group, allowPartial)) {
+        return false;
+    }
+    out.shorthandGroups[0] = group;
+    out.shorthandGroupCount = 1;
+
+    while (i < tokens.count) {
+        if (tokens.tokens[i].kind != FilterTokenKind::Or) {
+            return false;
+        }
+        const std::size_t orTokenIndex = i;
+        ++i;
+
+        FilterShorthandGroup nextGroup = {};
+        if (!FilterParseShorthandAndGroup(tokens, i, nextGroup, allowPartial)) {
+            if (allowPartial) {
+                i = orTokenIndex;
+                break;
+            }
+            return false;
+        }
+        if (out.shorthandGroupCount >= std::size(out.shorthandGroups)) {
+            if (allowPartial) {
+                i = orTokenIndex;
+                break;
+            }
+            return false;
+        }
+        out.shorthandGroups[out.shorthandGroupCount++] = nextGroup;
+    }
+
+    return true;
+}
+
+static bool FilterShorthandTextFieldsUseExpensiveField(const FilterShorthandTextFields& fields, const FilterSchema& schema) {
+    if (!FilterSchemaValid(schema) || fields.fieldIds == nullptr) {
+        return false;
+    }
+    for (std::size_t i = 0; i < fields.fieldCount; ++i) {
+        const FilterFieldSpec* const fieldSpec = FilterFindFieldSpecById(fields.fieldIds[i], schema);
+        if (fieldSpec != nullptr && fieldSpec->expensive) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool FilterTryParseShorthand(const char* rawInput, const FilterTokenizeResult& tokens, FilterParseResult& out,
+    const FilterSchema& schema, bool allowPartial) {
+    const FilterShorthandConfig& shorthand = schema.shorthand;
+    if (!FilterShorthandConfigured(shorthand)) {
+        return false;
+    }
+
+    const std::string_view trimmed = FilterTrimInput(rawInput != nullptr ? std::string_view(rawInput) : std::string_view{});
+    if (trimmed.empty()) {
+        return false;
+    }
+
+    bool useNumberShorthand = false;
+    double numberValue = 0.0;
+
+    if (tokens.ok && tokens.count == 1 && tokens.tokens[0].kind == FilterTokenKind::Number) {
+        if (!FilterTryParseDouble(tokens.tokens[0].lexeme, numberValue)) {
+            return false;
+        }
+        useNumberShorthand = true;
+    } else if (tokens.count == 0 && FilterTryParseDouble(trimmed, numberValue)) {
+        useNumberShorthand = true;
+    }
+
+    if (useNumberShorthand) {
+        if (shorthand.numberLessFieldId == 0) {
+            return false;
+        }
+        const FilterFieldSpec* const fieldSpec = FilterFindFieldSpecById(shorthand.numberLessFieldId, schema);
+        if (fieldSpec == nullptr || fieldSpec->kind != FilterFieldKind::Number) {
+            return false;
+        }
+
+        out.ok = true;
+        out.partial = false;
+        out.hasExpression = true;
+        out.shorthand = FilterShorthandKind::NumberLess;
+        FilterResetShorthandGroups(out);
+        out.error[0] = '\0';
+        out.andGroupCount = 1;
+
+        FilterPredicate& pred = out.andGroups[0].predicates[0];
+        pred = {};
+        pred.field = shorthand.numberLessFieldId;
+        pred.op = FilterOp::Less;
+        pred.negated = false;
+        pred.valueKind = FilterValueKind::Number;
+        pred.numberValue = numberValue;
+        out.andGroups[0].predicateCount = 1;
+        return true;
+    }
+
+    if (shorthand.primaryText.fieldCount == 0 || shorthand.primaryText.fieldIds == nullptr) {
+        return false;
+    }
+
+    FilterResetShorthandGroups(out);
+    if (!FilterParseShorthandExpression(tokens, out, allowPartial)) {
+        return false;
+    }
+
+    out.ok = true;
+    out.partial = allowPartial;
+    out.hasExpression = true;
+    out.shorthand = FilterShorthandKind::TextWords;
+    out.error[0] = '\0';
+    out.andGroupCount = 0;
+    return true;
+}
+
+bool FilterParseExpression(const char* rawInput, const FilterTokenizeResult& tokens, FilterParseResult& out,
+    const FilterSchema& schema) {
+    out.shorthand = FilterShorthandKind::None;
+    FilterResetShorthandGroups(out);
+
     if (!FilterSchemaValid(schema)) {
         out.ok = false;
         out.partial = false;
@@ -592,14 +829,35 @@ bool FilterParseExpression(const FilterTokenizeResult& tokens, FilterParseResult
         return true;
     }
 
+    if (FilterTryParseShorthand(rawInput, tokens, out, schema, false)) {
+        return true;
+    }
+
+    if (FilterTryParseShorthand(rawInput, tokens, out, schema, true)) {
+        if (strictFailure.error[0] != '\0') {
+            std::snprintf(out.error, sizeof(out.error), "%s", strictFailure.error);
+        } else {
+            out.error[0] = '\0';
+        }
+        return true;
+    }
+
     out = strictFailure;
     out.partial = false;
+    out.shorthand = FilterShorthandKind::None;
+    FilterResetShorthandGroups(out);
     return false;
 }
 
 bool FilterExpressionUsesExpensiveField(const FilterParseResult& expr, const FilterSchema& schema) {
     if (!expr.hasExpression || !FilterSchemaValid(schema)) {
         return false;
+    }
+    if (expr.shorthand == FilterShorthandKind::TextWords) {
+        if (FilterShorthandTextFieldsUseExpensiveField(schema.shorthand.primaryText, schema)) {
+            return true;
+        }
+        return FilterShorthandTextFieldsUseExpensiveField(schema.shorthand.secondaryText, schema);
     }
     for (std::size_t g = 0; g < expr.andGroupCount; ++g) {
         const FilterAndGroup& group = expr.andGroups[g];
@@ -655,12 +913,86 @@ static bool FilterMatchesAndGroup(const FilterAndGroup& group, const void* rowCo
     return true;
 }
 
+static bool FilterShorthandWordMatchesAnyTextField(std::string_view word, const void* rowContext,
+    const FilterShorthandTextFields& fields, const FilterSchema& schema, const FilterRowAccess& access) {
+    if (access.getText == nullptr || fields.fieldIds == nullptr) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < fields.fieldCount; ++i) {
+        const FilterFieldSpec* const fieldSpec = FilterFindFieldSpecById(fields.fieldIds[i], schema);
+        if (fieldSpec == nullptr || fieldSpec->kind != FilterFieldKind::Text) {
+            continue;
+        }
+        const std::string_view fieldText = access.getText(rowContext, fields.fieldIds[i]);
+        if (FilterContainsIgnoreCase(fieldText, word)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool FilterMatchesShorthandTextWords(const FilterShorthandGroup& group, const void* rowContext,
+    const FilterShorthandTextFields& fields, const FilterSchema& schema, const FilterRowAccess& access) {
+    if (!FilterSchemaValid(schema) || fields.fieldCount == 0 || fields.fieldIds == nullptr) {
+        return false;
+    }
+
+    for (std::size_t w = 0; w < group.wordCount; ++w) {
+        const FilterShorthandWord& word = group.words[w];
+        bool matched = FilterShorthandWordMatchesAnyTextField(word.text, rowContext, fields, schema, access);
+        if (word.negated) {
+            matched = !matched;
+        }
+        if (!matched) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool FilterMatchesShorthandLessBound(const FilterShorthandGroup& group, const void* rowContext, const FilterSchema& schema,
+    const FilterRowAccess& access) {
+    if (!group.hasLessBound) {
+        return true;
+    }
+    if (!FilterSchemaValid(schema) || access.getNumber == nullptr) {
+        return false;
+    }
+
+    const std::uint8_t fieldId = schema.shorthand.numberLessFieldId;
+    if (fieldId == 0) {
+        return false;
+    }
+
+    const FilterFieldSpec* const fieldSpec = FilterFindFieldSpecById(fieldId, schema);
+    if (fieldSpec == nullptr || fieldSpec->kind != FilterFieldKind::Number) {
+        return false;
+    }
+
+    return FilterMatchFloatOp(FilterOp::Less, access.getNumber(rowContext, fieldId), group.lessBound);
+}
+
+static bool FilterMatchesShorthandGroup(const FilterShorthandGroup& group, const void* rowContext, const FilterSchema& schema,
+    const FilterRowAccess& access) {
+    return FilterMatchesShorthandLessBound(group, rowContext, schema, access) &&
+        FilterMatchesShorthandTextWords(group, rowContext, schema.shorthand.primaryText, schema, access);
+}
+
 bool FilterMatchesExpression(const FilterParseResult& expr, const void* rowContext, const FilterSchema& schema,
     const FilterRowAccess& access) {
     if (!expr.hasExpression) {
         return true;
     }
     if (!FilterSchemaValid(schema)) {
+        return false;
+    }
+    if (expr.shorthand == FilterShorthandKind::TextWords) {
+        for (std::size_t g = 0; g < expr.shorthandGroupCount; ++g) {
+            if (FilterMatchesShorthandGroup(expr.shorthandGroups[g], rowContext, schema, access)) {
+                return true;
+            }
+        }
         return false;
     }
     for (std::size_t g = 0; g < expr.andGroupCount; ++g) {
@@ -672,7 +1004,28 @@ bool FilterMatchesExpression(const FilterParseResult& expr, const void* rowConte
 }
 
 float FilterGetLessUpperBound(const FilterParseResult& parseResult, std::uint8_t numberFieldId, float defaultValue) {
-    if (!parseResult.hasExpression || parseResult.andGroupCount == 0) {
+    if (!parseResult.hasExpression) {
+        return defaultValue;
+    }
+
+    if (parseResult.shorthand == FilterShorthandKind::TextWords) {
+        float orMaxBound = 0.0f;
+        bool anyGroupHasLess = false;
+
+        for (std::size_t g = 0; g < parseResult.shorthandGroupCount; ++g) {
+            const FilterShorthandGroup& group = parseResult.shorthandGroups[g];
+            if (group.hasLessBound) {
+                anyGroupHasLess = true;
+                orMaxBound = std::max(orMaxBound, static_cast<float>(group.lessBound));
+            }
+        }
+
+        if (anyGroupHasLess) {
+            return orMaxBound;
+        }
+    }
+
+    if (parseResult.andGroupCount == 0) {
         return defaultValue;
     }
 

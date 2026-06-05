@@ -22,13 +22,14 @@ struct RevLinks {
 enum class MarkerListFilterField : std::uint8_t {
     MName = 1,
     MId,
+    MType,
     MDesc,
     MLocation,
     MDistance,
     AName = 16,
     AId,
     AType,
-    AChild,
+    AAge,
     AStatus,
     ALocation,
     ADistance,
@@ -37,13 +38,14 @@ enum class MarkerListFilterField : std::uint8_t {
 
 static constexpr const char* kMNameAliases[] = { "mname", "mna" };
 static constexpr const char* kMIdAliases[] = { "mid" };
+static constexpr const char* kMTypeAliases[] = { "mtype", "mty" };
 static constexpr const char* kMDescAliases[] = { "mdesc", "mde" };
 static constexpr const char* kMLocationAliases[] = { "mloc", "mlo" };
 static constexpr const char* kMDistanceAliases[] = { "mdist", "mdi" };
 static constexpr const char* kNameAliases[] = { "name", "na" };
 static constexpr const char* kIdAliases[] = { "id" };
 static constexpr const char* kTypeAliases[] = { "type", "ty" };
-static constexpr const char* kChildAliases[] = { "child", "ch" };
+static constexpr const char* kAgeAliases[] = { "age", "ag" };
 static constexpr const char* kStatusAliases[] = { "status", "st" };
 static constexpr const char* kLocationAliases[] = { "location", "lo" };
 static constexpr const char* kDistanceAliases[] = { "distance", "di" };
@@ -52,20 +54,49 @@ static constexpr const char* kTaskAliases[] = { "task", "ta" };
 static constexpr FilterFieldSpec kMarkerListFilterFields[] = {
     { static_cast<std::uint8_t>(MarkerListFilterField::MName), FilterFieldKind::Text, kMNameAliases, std::size(kMNameAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::MId), FilterFieldKind::Text, kMIdAliases, std::size(kMIdAliases), false },
+    { static_cast<std::uint8_t>(MarkerListFilterField::MType), FilterFieldKind::Text, kMTypeAliases, std::size(kMTypeAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::MDesc), FilterFieldKind::Text, kMDescAliases, std::size(kMDescAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::MLocation), FilterFieldKind::Text, kMLocationAliases, std::size(kMLocationAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::MDistance), FilterFieldKind::Number, kMDistanceAliases, std::size(kMDistanceAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::AName), FilterFieldKind::Text, kNameAliases, std::size(kNameAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::AId), FilterFieldKind::Text, kIdAliases, std::size(kIdAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::AType), FilterFieldKind::Text, kTypeAliases, std::size(kTypeAliases), false },
-    { static_cast<std::uint8_t>(MarkerListFilterField::AChild), FilterFieldKind::Bool, kChildAliases, std::size(kChildAliases), false },
+    { static_cast<std::uint8_t>(MarkerListFilterField::AAge), FilterFieldKind::Text, kAgeAliases, std::size(kAgeAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::AStatus), FilterFieldKind::Text, kStatusAliases, std::size(kStatusAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::ALocation), FilterFieldKind::Text, kLocationAliases, std::size(kLocationAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::ADistance), FilterFieldKind::Number, kDistanceAliases, std::size(kDistanceAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::ATask), FilterFieldKind::Text, kTaskAliases, std::size(kTaskAliases), true },
 };
 
-static constexpr FilterSchema kMarkerListFilterSchema{ kMarkerListFilterFields, std::size(kMarkerListFilterFields) };
+static constexpr std::uint8_t kMarkerTextShorthandFieldIds[] = {
+    static_cast<std::uint8_t>(MarkerListFilterField::MName),
+    static_cast<std::uint8_t>(MarkerListFilterField::MId),
+    static_cast<std::uint8_t>(MarkerListFilterField::MType),
+    static_cast<std::uint8_t>(MarkerListFilterField::MDesc),
+    static_cast<std::uint8_t>(MarkerListFilterField::MLocation),
+};
+
+static constexpr std::uint8_t kMarkerActorTextShorthandFieldIds[] = {
+    static_cast<std::uint8_t>(MarkerListFilterField::AName),
+    static_cast<std::uint8_t>(MarkerListFilterField::AId),
+    static_cast<std::uint8_t>(MarkerListFilterField::AType),
+    static_cast<std::uint8_t>(MarkerListFilterField::AAge),
+    static_cast<std::uint8_t>(MarkerListFilterField::AStatus),
+    static_cast<std::uint8_t>(MarkerListFilterField::ALocation),
+    static_cast<std::uint8_t>(MarkerListFilterField::ATask),
+};
+
+static constexpr FilterShorthandConfig kMarkerListFilterShorthand{
+    static_cast<std::uint8_t>(MarkerListFilterField::MDistance),
+    { kMarkerTextShorthandFieldIds, std::size(kMarkerTextShorthandFieldIds) },
+    { kMarkerActorTextShorthandFieldIds, std::size(kMarkerActorTextShorthandFieldIds) },
+};
+
+static constexpr FilterSchema kMarkerListFilterSchema{
+    kMarkerListFilterFields,
+    std::size(kMarkerListFilterFields),
+    kMarkerListFilterShorthand,
+};
 
 static constexpr std::uint8_t kMarkerListFilterActorFieldMin = static_cast<std::uint8_t>(MarkerListFilterField::AName);
 
@@ -100,6 +131,8 @@ static std::string_view MarkerFilterRowText(const void* rowContext, std::uint8_t
         return row.jcName;
     case MarkerListFilterField::MId:
         return row.idHex;
+    case MarkerListFilterField::MType:
+        return row.type;
     case MarkerListFilterField::MDesc:
         return row.description;
     case MarkerListFilterField::MLocation:
@@ -134,6 +167,8 @@ static std::string_view MarkerListActorFilterRowText(const void* rowContext, std
         return row.idHex;
     case MarkerListFilterField::AType:
         return row.type;
+    case MarkerListFilterField::AAge:
+        return row.age;
     case MarkerListFilterField::AStatus:
         return row.status;
     case MarkerListFilterField::ALocation:
@@ -146,13 +181,9 @@ static std::string_view MarkerListActorFilterRowText(const void* rowContext, std
 }
 
 static bool MarkerListActorFilterRowBool(const void* rowContext, std::uint8_t fieldId) {
-    const auto& row = *static_cast<const ActorTableRow*>(rowContext);
-    switch (static_cast<MarkerListFilterField>(fieldId)) {
-    case MarkerListFilterField::AChild:
-        return row.isChild;
-    default:
-        return false;
-    }
+    (void)rowContext;
+    (void)fieldId;
+    return false;
 }
 
 static float MarkerListActorFilterRowNumber(const void* rowContext, std::uint8_t fieldId) {
@@ -165,9 +196,99 @@ static float MarkerListActorFilterRowNumber(const void* rowContext, std::uint8_t
     }
 }
 
+static bool MarkerShorthandGroupHasNegatedWord(const FilterShorthandGroup& group) {
+    for (std::size_t w = 0; w < group.wordCount; ++w) {
+        if (group.words[w].negated) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool MarkerShorthandSingleWordSatisfiesPositive(const FilterShorthandWord& word, const MarkerTableRow& markerRow,
+    const RevLinks* links, ActorTableRow& actorRow, std::string* actorTaskBuf, bool fillActorExpensive) {
+    FilterShorthandGroup single = {};
+    single.words[0] = word;
+    single.wordCount = 1;
+
+    if (FilterMatchesShorthandTextWords(single, &markerRow, kMarkerListFilterSchema.shorthand.primaryText,
+            kMarkerListFilterSchema, kMarkerFilterRowAccess)) {
+        return true;
+    }
+
+    if (!links || links->count == 0) {
+        return false;
+    }
+
+    for (std::uint16_t linkIndex = 0; linkIndex < links->count; ++linkIndex) {
+        RE::TESObjectREFR* actorRef = links->refs[linkIndex];
+        RE::Actor* actor = actorRef ? actorRef->As<RE::Actor>() : nullptr;
+        if (!actor) {
+            continue;
+        }
+
+        PopulateActorTableRow(actor, fillActorExpensive ? actorTaskBuf : nullptr, actorRow);
+        if (FilterMatchesShorthandTextWords(single, &actorRow, kMarkerListFilterSchema.shorthand.secondaryText,
+                kMarkerListFilterSchema, kMarkerListActorFilterRowAccess)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool MarkerShorthandSingleWordSatisfiesNegated(const FilterShorthandWord& word, const MarkerTableRow& markerRow,
+    const RevLinks* links, ActorTableRow& actorRow, std::string* actorTaskBuf, bool fillActorExpensive) {
+    FilterShorthandGroup single = {};
+    single.words[0] = word;
+    single.wordCount = 1;
+
+    if (!FilterMatchesShorthandTextWords(single, &markerRow, kMarkerListFilterSchema.shorthand.primaryText,
+            kMarkerListFilterSchema, kMarkerFilterRowAccess)) {
+        return false;
+    }
+
+    if (!links || links->count == 0) {
+        return true;
+    }
+
+    for (std::uint16_t linkIndex = 0; linkIndex < links->count; ++linkIndex) {
+        RE::TESObjectREFR* actorRef = links->refs[linkIndex];
+        RE::Actor* actor = actorRef ? actorRef->As<RE::Actor>() : nullptr;
+        if (!actor) {
+            continue;
+        }
+
+        PopulateActorTableRow(actor, fillActorExpensive ? actorTaskBuf : nullptr, actorRow);
+        if (!FilterMatchesShorthandTextWords(single, &actorRow, kMarkerListFilterSchema.shorthand.secondaryText,
+                kMarkerListFilterSchema, kMarkerListActorFilterRowAccess)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool MarkerFilterMatchesShorthandGroupWithNegation(const FilterShorthandGroup& group, const MarkerTableRow& markerRow,
+    const RevLinks* links, ActorTableRow& actorRow, std::string* actorTaskBuf, bool fillActorExpensive) {
+    for (std::size_t w = 0; w < group.wordCount; ++w) {
+        const FilterShorthandWord& word = group.words[w];
+        if (word.negated) {
+            if (!MarkerShorthandSingleWordSatisfiesNegated(word, markerRow, links, actorRow, actorTaskBuf, fillActorExpensive)) {
+                return false;
+            }
+        } else if (!MarkerShorthandSingleWordSatisfiesPositive(word, markerRow, links, actorRow, actorTaskBuf,
+                       fillActorExpensive)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool MarkerFilterAndGroupMatches(const FilterAndGroup& group, const MarkerTableRow& markerRow, const RevLinks* links,
     ActorTableRow& actorRow, std::string* actorTaskBuf, bool fillActorExpensive) {
-    bool hasActorPredicate = false;
+    bool hasPositiveActorPredicate = false;
+    bool hasNegativeActorPredicate = false;
 
     for (std::size_t i = 0; i < group.predicateCount; ++i) {
         const FilterPredicate& pred = group.predicates[i];
@@ -175,12 +296,40 @@ static bool MarkerFilterAndGroupMatches(const FilterAndGroup& group, const Marke
             if (!FilterMatchPredicate(pred, &markerRow, kMarkerListFilterSchema, kMarkerFilterRowAccess)) {
                 return false;
             }
+        } else if (pred.negated) {
+            hasNegativeActorPredicate = true;
         } else {
-            hasActorPredicate = true;
+            hasPositiveActorPredicate = true;
         }
     }
 
-    if (!hasActorPredicate) {
+    if (!hasPositiveActorPredicate && !hasNegativeActorPredicate) {
+        return true;
+    }
+
+    if (hasNegativeActorPredicate && links && links->count > 0) {
+        for (std::uint16_t linkIndex = 0; linkIndex < links->count; ++linkIndex) {
+            RE::TESObjectREFR* actorRef = links->refs[linkIndex];
+            RE::Actor* actor = actorRef ? actorRef->As<RE::Actor>() : nullptr;
+            if (!actor) {
+                continue;
+            }
+
+            PopulateActorTableRow(actor, fillActorExpensive ? actorTaskBuf : nullptr, actorRow);
+
+            for (std::size_t i = 0; i < group.predicateCount; ++i) {
+                const FilterPredicate& pred = group.predicates[i];
+                if (IsMarkerListFilterMarkerField(pred.field) || !pred.negated) {
+                    continue;
+                }
+                if (!FilterMatchPredicate(pred, &actorRow, kMarkerListFilterSchema, kMarkerListActorFilterRowAccess)) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    if (!hasPositiveActorPredicate) {
         return true;
     }
 
@@ -197,19 +346,68 @@ static bool MarkerFilterAndGroupMatches(const FilterAndGroup& group, const Marke
 
         PopulateActorTableRow(actor, fillActorExpensive ? actorTaskBuf : nullptr, actorRow);
 
-        bool actorMatchesAll = true;
+        bool actorMatchesAllPositive = true;
         for (std::size_t i = 0; i < group.predicateCount; ++i) {
             const FilterPredicate& pred = group.predicates[i];
-            if (IsMarkerListFilterMarkerField(pred.field)) {
+            if (IsMarkerListFilterMarkerField(pred.field) || pred.negated) {
                 continue;
             }
             if (!FilterMatchPredicate(pred, &actorRow, kMarkerListFilterSchema, kMarkerListActorFilterRowAccess)) {
-                actorMatchesAll = false;
+                actorMatchesAllPositive = false;
                 break;
             }
         }
 
-        if (actorMatchesAll) {
+        if (actorMatchesAllPositive) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool MarkerFilterMatchesShorthandGroup(const FilterShorthandGroup& group, const MarkerTableRow& markerRow,
+    const RevLinks* links, ActorTableRow& actorRow, std::string* actorTaskBuf, bool fillActorExpensive) {
+    if (!FilterMatchesShorthandLessBound(group, &markerRow, kMarkerListFilterSchema, kMarkerFilterRowAccess)) {
+        return false;
+    }
+
+    if (MarkerShorthandGroupHasNegatedWord(group)) {
+        return MarkerFilterMatchesShorthandGroupWithNegation(group, markerRow, links, actorRow, actorTaskBuf,
+            fillActorExpensive);
+    }
+
+    if (FilterMatchesShorthandTextWords(group, &markerRow, kMarkerListFilterSchema.shorthand.primaryText,
+            kMarkerListFilterSchema, kMarkerFilterRowAccess)) {
+        return true;
+    }
+
+    if (!links || links->count == 0) {
+        return false;
+    }
+
+    for (std::uint16_t linkIndex = 0; linkIndex < links->count; ++linkIndex) {
+        RE::TESObjectREFR* actorRef = links->refs[linkIndex];
+        RE::Actor* actor = actorRef ? actorRef->As<RE::Actor>() : nullptr;
+        if (!actor) {
+            continue;
+        }
+
+        PopulateActorTableRow(actor, fillActorExpensive ? actorTaskBuf : nullptr, actorRow);
+        if (FilterMatchesShorthandTextWords(group, &actorRow, kMarkerListFilterSchema.shorthand.secondaryText,
+                kMarkerListFilterSchema, kMarkerListActorFilterRowAccess)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool MarkerFilterMatchesShorthandText(const FilterParseResult& expr, const MarkerTableRow& markerRow, const RevLinks* links,
+    ActorTableRow& actorRow, std::string* actorTaskBuf, bool fillActorExpensive) {
+    for (std::size_t g = 0; g < expr.shorthandGroupCount; ++g) {
+        if (MarkerFilterMatchesShorthandGroup(expr.shorthandGroups[g], markerRow, links, actorRow, actorTaskBuf,
+                fillActorExpensive)) {
             return true;
         }
     }
@@ -221,6 +419,10 @@ static bool MarkerFilterMatchesExpression(const FilterParseResult& expr, const M
     ActorTableRow& actorRow, std::string* actorTaskBuf, bool fillActorExpensive) {
     if (!expr.hasExpression) {
         return true;
+    }
+
+    if (expr.shorthand == FilterShorthandKind::TextWords) {
+        return MarkerFilterMatchesShorthandText(expr, markerRow, links, actorRow, actorTaskBuf, fillActorExpensive);
     }
 
     for (std::size_t g = 0; g < expr.andGroupCount; ++g) {
@@ -245,7 +447,7 @@ static void RenderActorTableRow(const ActorTableRow& row, RE::Actor* actor) {
     ImGuiMCP::TableSetColumnIndex(2);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.type));
     ImGuiMCP::TableSetColumnIndex(3);
-    ImGuiMCP::TextUnformatted(row.isChild ? "Yes" : "No");
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.age));
     ImGuiMCP::TableSetColumnIndex(4);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.status));
     ImGuiMCP::TableSetColumnIndex(5);
@@ -275,7 +477,7 @@ static void RenderLinkedActors(const RevLinks* links) {
         ImGuiMCP::TableSetupColumn("Name");
         ImGuiMCP::TableSetupColumn("ID");
         ImGuiMCP::TableSetupColumn("Type");
-        ImGuiMCP::TableSetupColumn("Child");
+        ImGuiMCP::TableSetupColumn("Age");
         ImGuiMCP::TableSetupColumn("Status");
         ImGuiMCP::TableSetupColumn("Location");
         ImGuiMCP::TableSetupColumn("Distance");
@@ -506,7 +708,7 @@ void __stdcall UI::MarkerListView::Render() {
         strncpy_s(lastTokenizedFilter, filterBuffer, sizeof(lastTokenizedFilter));
         lastTokenizedFilter[sizeof(lastTokenizedFilter) - 1] = '\0';
         FilterTokenize(filterBuffer, tokenizeResult);
-        FilterParseExpression(tokenizeResult, parseResult, kMarkerListFilterSchema);
+        FilterParseExpression(filterBuffer, tokenizeResult, parseResult, kMarkerListFilterSchema);
         filterUsesExpensiveField = FilterExpressionUsesExpensiveField(parseResult, kMarkerListFilterSchema);
     }
     if (!parseResult.ok && parseResult.error[0] != '\0') {
@@ -524,7 +726,7 @@ void __stdcall UI::MarkerListView::Render() {
     }
     ImGuiMCP::Spacing();
 
-    const bool applyFilter = tokenizeResult.ok && parseResult.hasExpression;
+    const bool applyFilter = parseResult.ok && parseResult.hasExpression;
     const bool fillActorExpensive = applyFilter && filterUsesExpensiveField;
 
     RE::TESDataHandler* dh = RE::TESDataHandler::GetSingleton();
