@@ -5,6 +5,7 @@
 #include "UI/actorListView.h"
 #include "UI/markerListView.h"
 #include "UI/actorSelector.h"
+#include "UI/markerSelector.h"
 #include "UI/formSelector.h"
 
 void UI::Register() {
@@ -14,6 +15,9 @@ void UI::Register() {
 
     ActorSelector::Window = SKSEMenuFramework::AddWindow(ActorSelector::Render);
     ActorSelector::Window->IsOpen = false;
+
+    MarkerSelector::Window = SKSEMenuFramework::AddWindow(MarkerSelector::Render);
+    MarkerSelector::Window->IsOpen = false;
 
     FormSelector::Window = SKSEMenuFramework::AddWindow(FormSelector::Render);
     FormSelector::Window->IsOpen = false;

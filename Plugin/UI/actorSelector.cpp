@@ -140,7 +140,7 @@ static std::string_view ActorSelectorFilterRowText(const void* rowContext, std::
     case ActorSelectorFilterField::Name:
         return row.name;
     case ActorSelectorFilterField::Id:
-        return row.idHex;
+        return ActorTableRowIdHex(row);
     case ActorSelectorFilterField::Type:
         return row.type;
     case ActorSelectorFilterField::Age:

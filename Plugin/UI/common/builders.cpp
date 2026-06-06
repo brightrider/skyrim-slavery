@@ -1,6 +1,7 @@
 #include "builders.h"
 
 #include <charconv>
+#include <cstdio>
 #include <cstring>
 
 #include "../../JCAPI.h"
@@ -19,7 +20,6 @@ void PopulateActorTableRow(RE::Actor* actor, std::string* taskBuf, ActorTableRow
     }
 
     std::snprintf(out.idHexBuf, sizeof(out.idHexBuf), "%08X", actor->GetFormID());
-    out.idHex = out.idHexBuf;
 
     if (const RE::TESBoundObject* base = actor->GetBaseObject()) {
         if (const char* typeName = base->GetName()) {
@@ -61,8 +61,7 @@ void PopulateMarkerTableRow(RE::TESObjectREFR* marker, float distance, MarkerTab
     JC::ObjectId markerDb = JC::GetMarkerDb();
     if (markerDb == 0) {
         out.jcNameStorage = "unknown";
-        out.jcName = out.jcNameStorage.c_str();
-        out.idHex = "unknown";
+        std::snprintf(out.idHexBuf, sizeof(out.idHexBuf), "unknown");
         out.description = "unknown";
         out.location = "unknown";
         return;
@@ -72,21 +71,8 @@ void PopulateMarkerTableRow(RE::TESObjectREFR* marker, float distance, MarkerTab
     if (out.jcNameStorage.empty()) {
         out.jcNameStorage = "unknown";
     }
-    out.jcName = out.jcNameStorage.c_str();
 
-    auto [idPtr, idEc] = std::to_chars(out.idHexBuf, out.idHexBuf + sizeof(out.idHexBuf), marker->GetFormID(), 16);
-    if (idEc == std::errc{}) {
-        const std::size_t idLen = static_cast<std::size_t>(idPtr - out.idHexBuf);
-        for (std::size_t i = 0; i < idLen; ++i) {
-            char& digit = out.idHexBuf[i];
-            if (digit >= 'a' && digit <= 'f') {
-                digit = static_cast<char>(digit - 'a' + 'A');
-            }
-        }
-        out.idHex = std::string_view(out.idHexBuf, idLen);
-    } else {
-        out.idHex = "unknown";
-    }
+    std::snprintf(out.idHexBuf, sizeof(out.idHexBuf), "%08X", marker->GetFormID());
 
     if (const RE::TESBoundObject* base = marker->GetBaseObject()) {
         out.type = RE::FormTypeToString(base->GetFormType());
@@ -122,9 +108,12 @@ void FormatMarkerDescription(const MarkerTableRow& row, std::string& buf) {
     char tmp[32];
     buf.clear();
 
-    buf.append(row.jcName.empty() ? "unknown" : row.jcName.data());
+    const std::string_view name = MarkerTableRowName(row);
+    const std::string_view idHex = MarkerTableRowIdHex(row);
+
+    buf.append(name.empty() ? "unknown" : name.data());
     buf.append("[");
-    buf.append(row.idHex.empty() ? "unknown" : row.idHex.data());
+    buf.append(idHex.empty() ? "unknown" : idHex.data());
     buf.append(", ");
     buf.append(row.type.empty() ? "unknown" : row.type.data());
     buf.append(", ");

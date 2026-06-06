@@ -16,8 +16,6 @@
 #include "../PAPI.h"
 #include "../utility.h"
 
-#include "actorSelector.h"
-
 enum class ActorFilterField : std::uint8_t {
     Unknown = 0,
     Name,
@@ -157,7 +155,7 @@ static std::string_view ActorFilterRowText(const void* rowContext, std::uint8_t 
     case ActorFilterField::Name:
         return row.name;
     case ActorFilterField::Id:
-        return row.idHex;
+        return ActorTableRowIdHex(row);
     case ActorFilterField::Type:
         return row.type;
     case ActorFilterField::Age:

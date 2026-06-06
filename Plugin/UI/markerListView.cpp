@@ -128,9 +128,9 @@ static std::string_view MarkerFilterRowText(const void* rowContext, std::uint8_t
     const auto& row = *static_cast<const MarkerTableRow*>(rowContext);
     switch (static_cast<MarkerListFilterField>(fieldId)) {
     case MarkerListFilterField::MName:
-        return row.jcName;
+        return MarkerTableRowName(row);
     case MarkerListFilterField::MId:
-        return row.idHex;
+        return MarkerTableRowIdHex(row);
     case MarkerListFilterField::MType:
         return row.type;
     case MarkerListFilterField::MDesc:
@@ -164,7 +164,7 @@ static std::string_view MarkerListActorFilterRowText(const void* rowContext, std
     case MarkerListFilterField::AName:
         return row.name;
     case MarkerListFilterField::AId:
-        return row.idHex;
+        return ActorTableRowIdHex(row);
     case MarkerListFilterField::AType:
         return row.type;
     case MarkerListFilterField::AAge:
@@ -810,7 +810,7 @@ void __stdcall UI::MarkerListView::Render() {
             }
 
             FormatMarkerDescription(markerRow, header);
-            CollapsedHeader(header.c_str(), currentMarker, markerRow.jcName, BRSS_MarkerControllerScript, links, headerOpenForce);
+            CollapsedHeader(header.c_str(), currentMarker, MarkerTableRowName(markerRow), BRSS_MarkerControllerScript, links, headerOpenForce);
 
             currentForm = JC::jFormMapNextKey(JC::Domain, markerDb, currentForm, nullptr);
         }
