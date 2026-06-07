@@ -47,8 +47,41 @@ namespace Utility {
         return getFormEditorID ? getFormEditorID(formId) : nullptr;
     }
 
-    static void ForEachReferenceInRange(RE::TES* tes, RE::TESObjectREFR* a_origin, float a_radius, std::function<RE::BSContainer::ForEachResult(RE::TESObjectREFR& a_ref)> a_callback)
-	{
+    const char* GetWeaponName(RE::Actor* actor) {
+        RE::TESDataHandler* dh = RE::TESDataHandler::GetSingleton();
+        if (!dh) {
+            return "unknown";
+        }
+
+        static auto* battleaxe = dh->LookupForm<RE::TESObjectWEAP>(0x13980, "Skyrim.esm");
+        static auto* greatsword = dh->LookupForm<RE::TESObjectWEAP>(0x1359D, "Skyrim.esm");
+        static auto* mace = dh->LookupForm<RE::TESObjectWEAP>(0x13982, "Skyrim.esm");
+        static auto* sword = dh->LookupForm<RE::TESObjectWEAP>(0x12EB7, "Skyrim.esm");
+        static auto* waraxe = dh->LookupForm<RE::TESObjectWEAP>(0x13790, "Skyrim.esm");
+        static auto* warhammer = dh->LookupForm<RE::TESObjectWEAP>(0x13981, "Skyrim.esm");
+        static auto* bow = dh->LookupForm<RE::TESObjectWEAP>(0x13985, "Skyrim.esm");
+        static auto* crossbow = dh->LookupForm<RE::TESObjectWEAP>(0x801, "Dawnguard.esm");
+        static auto* whip = dh->LookupForm<RE::TESObjectWEAP>(0x6004, "ZaZAnimationPack.esm");
+        if (!battleaxe || !greatsword || !mace || !sword || !waraxe || !warhammer || !bow || !crossbow || !whip) {
+            return "unknown";
+        }
+
+        for (const auto& [item, _] : actor->GetInventory()) {
+            if (item == battleaxe) return "BattleAxe";
+            if (item == greatsword) return "Greatsword";
+            if (item == mace) return "Mace";
+            if (item == sword) return "Sword";
+            if (item == waraxe) return "WarAxe";
+            if (item == warhammer) return "Warhammer";
+            if (item == bow) return "Bow";
+            if (item == crossbow) return "Crossbow";
+            if (item == whip) return "Whip";
+        }
+
+        return "Unarmed";
+    }
+
+    static void ForEachReferenceInRange(RE::TES* tes, RE::TESObjectREFR* a_origin, float a_radius, std::function<RE::BSContainer::ForEachResult(RE::TESObjectREFR& a_ref)> a_callback) {
 		if (a_origin && a_radius > 0.0f) {
 			const auto originPos = a_origin->GetPosition();
 

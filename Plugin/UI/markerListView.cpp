@@ -29,6 +29,7 @@ enum class MarkerListFilterField : std::uint8_t {
     AName = 16,
     AId,
     AType,
+    AWeapon,
     AAge,
     AStatus,
     ALocation,
@@ -45,6 +46,7 @@ static constexpr const char* kMDistanceAliases[] = { "mdist", "mdi" };
 static constexpr const char* kNameAliases[] = { "name", "na" };
 static constexpr const char* kIdAliases[] = { "id" };
 static constexpr const char* kTypeAliases[] = { "type", "ty" };
+static constexpr const char* kWeaponAliases[] = { "weapon", "we" };
 static constexpr const char* kAgeAliases[] = { "age", "ag" };
 static constexpr const char* kStatusAliases[] = { "status", "st" };
 static constexpr const char* kLocationAliases[] = { "location", "lo" };
@@ -61,6 +63,7 @@ static constexpr FilterFieldSpec kMarkerListFilterFields[] = {
     { static_cast<std::uint8_t>(MarkerListFilterField::AName), FilterFieldKind::Text, kNameAliases, std::size(kNameAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::AId), FilterFieldKind::Text, kIdAliases, std::size(kIdAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::AType), FilterFieldKind::Text, kTypeAliases, std::size(kTypeAliases), false },
+    { static_cast<std::uint8_t>(MarkerListFilterField::AWeapon), FilterFieldKind::Text, kWeaponAliases, std::size(kWeaponAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::AAge), FilterFieldKind::Text, kAgeAliases, std::size(kAgeAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::AStatus), FilterFieldKind::Text, kStatusAliases, std::size(kStatusAliases), false },
     { static_cast<std::uint8_t>(MarkerListFilterField::ALocation), FilterFieldKind::Text, kLocationAliases, std::size(kLocationAliases), false },
@@ -80,6 +83,7 @@ static constexpr std::uint8_t kMarkerActorTextShorthandFieldIds[] = {
     static_cast<std::uint8_t>(MarkerListFilterField::AName),
     static_cast<std::uint8_t>(MarkerListFilterField::AId),
     static_cast<std::uint8_t>(MarkerListFilterField::AType),
+    static_cast<std::uint8_t>(MarkerListFilterField::AWeapon),
     static_cast<std::uint8_t>(MarkerListFilterField::AAge),
     static_cast<std::uint8_t>(MarkerListFilterField::AStatus),
     static_cast<std::uint8_t>(MarkerListFilterField::ALocation),
@@ -167,6 +171,8 @@ static std::string_view MarkerListActorFilterRowText(const void* rowContext, std
         return ActorTableRowIdHex(row);
     case MarkerListFilterField::AType:
         return row.type;
+    case MarkerListFilterField::AWeapon:
+        return row.weapon;
     case MarkerListFilterField::AAge:
         return row.age;
     case MarkerListFilterField::AStatus:
@@ -447,14 +453,16 @@ static void RenderActorTableRow(const ActorTableRow& row, RE::Actor* actor) {
     ImGuiMCP::TableSetColumnIndex(2);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.type));
     ImGuiMCP::TableSetColumnIndex(3);
-    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.age));
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.weapon));
     ImGuiMCP::TableSetColumnIndex(4);
-    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.status));
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.age));
     ImGuiMCP::TableSetColumnIndex(5);
-    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.location));
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.status));
     ImGuiMCP::TableSetColumnIndex(6);
-    ImGuiMCP::Text("%.2f", row.distance);
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.location));
     ImGuiMCP::TableSetColumnIndex(7);
+    ImGuiMCP::Text("%.2f", row.distance);
+    ImGuiMCP::TableSetColumnIndex(8);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.task));
 }
 
@@ -473,10 +481,11 @@ static void RenderLinkedActors(const RevLinks* links) {
     constexpr ImGuiMCP::ImGuiTableFlags tableFlags = ImGuiMCP::ImGuiTableFlags_Resizable |
                                                      ImGuiMCP::ImGuiTableFlags_RowBg |
                                                      ImGuiMCP::ImGuiTableFlags_SizingFixedFit;
-    if (ImGuiMCP::BeginTable("LinkedActors", 8, tableFlags)) {
+    if (ImGuiMCP::BeginTable("LinkedActors", 9, tableFlags)) {
         ImGuiMCP::TableSetupColumn("Name");
         ImGuiMCP::TableSetupColumn("ID");
         ImGuiMCP::TableSetupColumn("Type");
+        ImGuiMCP::TableSetupColumn("Weapon");
         ImGuiMCP::TableSetupColumn("Age");
         ImGuiMCP::TableSetupColumn("Status");
         ImGuiMCP::TableSetupColumn("Location");

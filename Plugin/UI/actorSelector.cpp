@@ -17,6 +17,7 @@ enum class ActorSelectorFilterField : std::uint8_t {
     Name,
     Id,
     Type,
+    Weapon,
     Age,
     Status,
     Location,
@@ -26,6 +27,7 @@ enum class ActorSelectorFilterField : std::uint8_t {
 static constexpr const char* kNameAliases[] = { "name", "na" };
 static constexpr const char* kIdAliases[] = { "id" };
 static constexpr const char* kTypeAliases[] = { "type", "ty" };
+static constexpr const char* kWeaponAliases[] = { "weapon", "we" };
 static constexpr const char* kAgeAliases[] = { "age", "ag" };
 static constexpr const char* kStatusAliases[] = { "status", "st" };
 static constexpr const char* kLocationAliases[] = { "location", "lo" };
@@ -35,6 +37,7 @@ static constexpr FilterFieldSpec kActorSelectorFilterFields[] = {
     { static_cast<std::uint8_t>(ActorSelectorFilterField::Name), FilterFieldKind::Text, kNameAliases, std::size(kNameAliases), false },
     { static_cast<std::uint8_t>(ActorSelectorFilterField::Id), FilterFieldKind::Text, kIdAliases, std::size(kIdAliases), false },
     { static_cast<std::uint8_t>(ActorSelectorFilterField::Type), FilterFieldKind::Text, kTypeAliases, std::size(kTypeAliases), false },
+    { static_cast<std::uint8_t>(ActorSelectorFilterField::Weapon), FilterFieldKind::Text, kWeaponAliases, std::size(kWeaponAliases), false },
     { static_cast<std::uint8_t>(ActorSelectorFilterField::Age), FilterFieldKind::Text, kAgeAliases, std::size(kAgeAliases), false },
     { static_cast<std::uint8_t>(ActorSelectorFilterField::Status), FilterFieldKind::Text, kStatusAliases, std::size(kStatusAliases), false },
     { static_cast<std::uint8_t>(ActorSelectorFilterField::Location), FilterFieldKind::Text, kLocationAliases, std::size(kLocationAliases), false },
@@ -45,6 +48,7 @@ static constexpr std::uint8_t kActorSelectorTextShorthandFieldIds[] = {
     static_cast<std::uint8_t>(ActorSelectorFilterField::Name),
     static_cast<std::uint8_t>(ActorSelectorFilterField::Id),
     static_cast<std::uint8_t>(ActorSelectorFilterField::Type),
+    static_cast<std::uint8_t>(ActorSelectorFilterField::Weapon),
     static_cast<std::uint8_t>(ActorSelectorFilterField::Age),
     static_cast<std::uint8_t>(ActorSelectorFilterField::Status),
     static_cast<std::uint8_t>(ActorSelectorFilterField::Location),
@@ -143,6 +147,8 @@ static std::string_view ActorSelectorFilterRowText(const void* rowContext, std::
         return ActorTableRowIdHex(row);
     case ActorSelectorFilterField::Type:
         return row.type;
+    case ActorSelectorFilterField::Weapon:
+        return row.weapon;
     case ActorSelectorFilterField::Age:
         return row.age;
     case ActorSelectorFilterField::Status:
@@ -228,12 +234,14 @@ static void RenderActorSelectorTableRow(const ActorTableRow& row, RE::Actor* act
     ImGuiMCP::TableSetColumnIndex(2);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.type));
     ImGuiMCP::TableSetColumnIndex(3);
-    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.age));
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.weapon));
     ImGuiMCP::TableSetColumnIndex(4);
-    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.status));
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.age));
     ImGuiMCP::TableSetColumnIndex(5);
-    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.location));
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.status));
     ImGuiMCP::TableSetColumnIndex(6);
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.location));
+    ImGuiMCP::TableSetColumnIndex(7);
     ImGuiMCP::Text("%.2f", row.distance);
 
     ImGuiMCP::TableSetColumnIndex(0);
@@ -359,10 +367,11 @@ void __stdcall UI::ActorSelector::Render() {
                                                          ImGuiMCP::ImGuiTableFlags_RowBg |
                                                          ImGuiMCP::ImGuiTableFlags_SizingFixedFit |
                                                          ImGuiMCP::ImGuiTableFlags_ScrollY;
-        if (ImGuiMCP::BeginTable("ActorSelectorTable", 7, tableFlags)) {
+        if (ImGuiMCP::BeginTable("ActorSelectorTable", 8, tableFlags)) {
             ImGuiMCP::TableSetupColumn("Name", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 300.0f);
             ImGuiMCP::TableSetupColumn("ID");
             ImGuiMCP::TableSetupColumn("Type");
+            ImGuiMCP::TableSetupColumn("Weapon");
             ImGuiMCP::TableSetupColumn("Age");
             ImGuiMCP::TableSetupColumn("Status");
             ImGuiMCP::TableSetupColumn("Location");

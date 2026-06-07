@@ -21,6 +21,7 @@ enum class ActorFilterField : std::uint8_t {
     Name,
     Id,
     Type,
+    Weapon,
     Age,
     Status,
     Location,
@@ -31,6 +32,7 @@ enum class ActorFilterField : std::uint8_t {
 static constexpr const char* kNameAliases[] = { "name", "na" };
 static constexpr const char* kIdAliases[] = { "id" };
 static constexpr const char* kTypeAliases[] = { "type", "ty" };
+static constexpr const char* kWeaponAliases[] = { "weapon", "we" };
 static constexpr const char* kAgeAliases[] = { "age", "ag" };
 static constexpr const char* kStatusAliases[] = { "status", "st" };
 static constexpr const char* kLocationAliases[] = { "location", "lo" };
@@ -41,6 +43,7 @@ static constexpr FilterFieldSpec kActorFilterFields[] = {
     { static_cast<std::uint8_t>(ActorFilterField::Name), FilterFieldKind::Text, kNameAliases, std::size(kNameAliases), false },
     { static_cast<std::uint8_t>(ActorFilterField::Id), FilterFieldKind::Text, kIdAliases, std::size(kIdAliases), false },
     { static_cast<std::uint8_t>(ActorFilterField::Type), FilterFieldKind::Text, kTypeAliases, std::size(kTypeAliases), false },
+    { static_cast<std::uint8_t>(ActorFilterField::Weapon), FilterFieldKind::Text, kWeaponAliases, std::size(kWeaponAliases), false },
     { static_cast<std::uint8_t>(ActorFilterField::Age), FilterFieldKind::Text, kAgeAliases, std::size(kAgeAliases), false },
     { static_cast<std::uint8_t>(ActorFilterField::Status), FilterFieldKind::Text, kStatusAliases, std::size(kStatusAliases), false },
     { static_cast<std::uint8_t>(ActorFilterField::Location), FilterFieldKind::Text, kLocationAliases, std::size(kLocationAliases), false },
@@ -52,6 +55,7 @@ static constexpr std::uint8_t kActorTextShorthandFieldIds[] = {
     static_cast<std::uint8_t>(ActorFilterField::Name),
     static_cast<std::uint8_t>(ActorFilterField::Id),
     static_cast<std::uint8_t>(ActorFilterField::Type),
+    static_cast<std::uint8_t>(ActorFilterField::Weapon),
     static_cast<std::uint8_t>(ActorFilterField::Age),
     static_cast<std::uint8_t>(ActorFilterField::Status),
     static_cast<std::uint8_t>(ActorFilterField::Location),
@@ -158,6 +162,8 @@ static std::string_view ActorFilterRowText(const void* rowContext, std::uint8_t 
         return ActorTableRowIdHex(row);
     case ActorFilterField::Type:
         return row.type;
+    case ActorFilterField::Weapon:
+        return row.weapon;
     case ActorFilterField::Age:
         return row.age;
     case ActorFilterField::Status:
@@ -292,18 +298,20 @@ static void RenderActorTableRow(
     ImGuiMCP::TableSetColumnIndex(2);
     ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.type));
     ImGuiMCP::TableSetColumnIndex(3);
-    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.age));
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.weapon));
     ImGuiMCP::TableSetColumnIndex(4);
-    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.status));
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.age));
     ImGuiMCP::TableSetColumnIndex(5);
-    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.location));
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.status));
     ImGuiMCP::TableSetColumnIndex(6);
-    ImGuiMCP::Text("%.2f", row.distance);
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(row.location));
     ImGuiMCP::TableSetColumnIndex(7);
+    ImGuiMCP::Text("%.2f", row.distance);
+    ImGuiMCP::TableSetColumnIndex(8);
     if (!hideTaskColumn) {
         ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(taskText));
     }
-    ImGuiMCP::TableSetColumnIndex(8);
+    ImGuiMCP::TableSetColumnIndex(9);
     ImGuiMCP::PushID(static_cast<int>(actor->GetFormID()));
     const float actionButtonSize = ImGuiMCP::GetFrameHeight();
     const ImGuiMCP::ImVec2 actionButtonSizeVec{ actionButtonSize, actionButtonSize };
@@ -477,10 +485,11 @@ void __stdcall UI::ActorListView::Render() {
         const float actionButtonSize = ImGuiMCP::GetFrameHeight();
         const float actionsColumnWidth = actionButtonSize * 3.0f + ImGuiMCP::GetStyle()->ItemSpacing.x * 2.0f +
                                          ImGuiMCP::GetStyle()->CellPadding.x * 2.0f;
-        if (ImGuiMCP::BeginTable("ActorListTable", 9, tableFlags)) {
+        if (ImGuiMCP::BeginTable("ActorListTable", 10, tableFlags)) {
             ImGuiMCP::TableSetupColumn("Name", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 300.0f);
             ImGuiMCP::TableSetupColumn("ID");
             ImGuiMCP::TableSetupColumn("Type");
+            ImGuiMCP::TableSetupColumn("Weapon");
             ImGuiMCP::TableSetupColumn("Age");
             ImGuiMCP::TableSetupColumn("Status");
             ImGuiMCP::TableSetupColumn("Location");

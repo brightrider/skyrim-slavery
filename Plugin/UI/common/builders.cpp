@@ -27,6 +27,8 @@ void PopulateActorTableRow(RE::Actor* actor, std::string* taskBuf, ActorTableRow
         }
     }
 
+    out.weapon = Utility::GetWeaponName(actor);
+
     static constexpr char kActorAgeAdult[] = "Adult";
     static constexpr char kActorAgeChild[] = "Child";
     out.age = actor->IsChild() ? std::string_view(kActorAgeChild) : std::string_view(kActorAgeAdult);

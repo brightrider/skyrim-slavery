@@ -6,6 +6,7 @@ struct ActorTableRow {
     char idHexBuf[16] = {};
     std::string_view name = {};
     std::string_view type = {};
+    std::string_view weapon = {};
     std::string_view status = {};
     std::string_view location = {};
     std::string_view task = {};

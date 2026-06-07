@@ -25,12 +25,13 @@ Faction Property CWPlayerAlly Auto
 
 Message Property BRSS_SelectNpcType Auto
 Message Property BRSS_SelectRace Auto
+Message Property BRSS_SelectWeapon Auto
 
 Int ActorDb = 0
 
 Bool Lock = False
 
-BRSSActorScript Function AddActor(String actorType, String name="", String actorRace="", Bool isVampire=False)
+BRSSActorScript Function AddActor(String actorType, String name="", String actorRace="", Bool isVampire=False, Int weaponIdx=-1)
     AcquireLock()
 
     If ActorDb == 0
@@ -68,7 +69,11 @@ BRSSActorScript Function AddActor(String actorType, String name="", String actor
         If name != ""
             newActor.SetActorName(name)
         EndIf
-        newActor.AddItem(Game.GetFormFromFile(0x6004, "ZaZAnimationPack.esm"), abSilent=True)
+        If weaponIdx == -1
+            weaponIdx = Utility.RandomInt(0, 7)
+        EndIf
+        newActor.AddItem(GetWeaponByIdx(weaponIdx), abSilent=True)
+        newActor.AddItem(GetWeaponAddonByIdx(weaponIdx), abSilent=True)
     ElseIf actorType == "Slave"
         If ! SelectNpcTemplateList(actorRace, isVampire, False)
             ReleaseLock()
@@ -110,9 +115,17 @@ Function BuyActor()
         Return
     EndIf
 
+    Int weaponIdx = -1
+    If npcType == 0 || npcType == 1
+        weaponIdx = BRSS_SelectWeapon.Show()
+        If weaponIdx == 9
+            Return
+        EndIf
+    EndIf
+
     If npcType == 0
         If player.GetItemCount(gold) >= 500
-            BRSSActorScript newActor = AddActor("Guard", "", npcRace, isVampire=False)
+            BRSSActorScript newActor = AddActor("Guard", "", npcRace, isVampire=False, weaponIdx=weaponIdx)
             newActor.AddToFaction(CWPlayerAlly)
             player.RemoveItem(gold, 500)
         Else
@@ -120,7 +133,7 @@ Function BuyActor()
         EndIf
     ElseIf npcType == 1
         If player.GetItemCount(gold) >= 1500
-            BRSSActorScript newActor = AddActor("Guard", "", npcRace, isVampire=True)
+            BRSSActorScript newActor = AddActor("Guard", "", npcRace, isVampire=True, weaponIdx=weaponIdx)
             If ! newActor
                 Debug.Notification("This race is currently not available for vampires.")
                 Return
@@ -359,6 +372,36 @@ String Function GetRaceByIdxChild(Int idx)
         Return "imperial"
     ElseIf idx == 3
         Return "redguard"
+    EndIf
+EndFunction
+
+Form Function GetWeaponAddonByIdx(Int idx)
+    If idx == 6
+        Return Game.GetForm(0x1397D)
+    ElseIf idx == 7
+        Return Game.GetFormFromFile(0xBB3, "Dawnguard.esm")
+    EndIf
+EndFunction
+
+Form Function GetWeaponByIdx(Int idx)
+    If idx == 0
+        Return Game.GetForm(0x13980)
+    ElseIf idx == 1
+        Return Game.GetForm(0x1359D)
+    ElseIf idx == 2
+        Return Game.GetForm(0x13982)
+    ElseIf idx == 3
+        Return Game.GetForm(0x12EB7)
+    ElseIf idx == 4
+        Return Game.GetForm(0x13790)
+    ElseIf idx == 5
+        Return Game.GetForm(0x13981)
+    ElseIf idx == 6
+        Return Game.GetForm(0x13985)
+    ElseIf idx == 7
+        Return Game.GetFormFromFile(0x801, "Dawnguard.esm")
+    ElseIf idx == 8
+        Return Game.GetFormFromFile(0x6004, "ZaZAnimationPack.esm")
     EndIf
 EndFunction
 

@@ -4,9 +4,31 @@ String Function Test() global
     Return "BRSS: OK"
 EndFunction
 
-String Function ActorAdd(String actorType, String name, String actorRace, Bool isVampire) global
+String Function ActorAdd(String actorType, String name, String actorRace, Bool isVampire, String actorWeapon) global
     BRSSControllerScript controller = Game.GetFormFromFile(0x0002E123, "SkyrimSlavery.esp") as BRSSControllerScript
-    controller.AddActor(actorType, name, actorRace, isVampire)
+
+    Int weaponIdx = -1
+    If actorWeapon == "battleaxe"
+        weaponIdx = 0
+    ElseIf actorWeapon == "greatsword"
+        weaponIdx = 1
+    ElseIf actorWeapon == "mace"
+        weaponIdx = 2
+    ElseIf actorWeapon == "sword"
+        weaponIdx = 3
+    ElseIf actorWeapon == "waraxe"
+        weaponIdx = 4
+    ElseIf actorWeapon == "warhammer"
+        weaponIdx = 5
+    ElseIf actorWeapon == "bow"
+        weaponIdx = 6
+    ElseIf actorWeapon == "crossbow"
+        weaponIdx = 7
+    ElseIf actorWeapon == "whip"
+        weaponIdx = 8
+    EndIf
+
+    controller.AddActor(actorType, name, actorRace, isVampire, weaponIdx)
     Return ""
 EndFunction
 

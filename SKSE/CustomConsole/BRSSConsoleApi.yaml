@@ -25,6 +25,10 @@ subs:
         type: Bool
         help: Is vampire (default=false, not supported for redguard and woodelf)
         required: false
+      - name: actorWeapon
+        type: String
+        help: Actor weapon (default=random, battleaxe, greatsword, mace, sword, waraxe, warhammer, bow, crossbow, whip)
+        required: false
   - name: actor-list
     func: ActorList
     help: List actors
