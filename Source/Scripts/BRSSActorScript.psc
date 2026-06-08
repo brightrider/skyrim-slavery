@@ -307,7 +307,10 @@ Function Use(ObjectReference target, ObjectReference secondTarget=None, String m
     ElseIf miningRes == "wood"
         MiningResource = Firewood01
     Else
-        MiningResource = None
+        MiningResource = (target as MineOreScript).Ore
+        If !MiningResource
+            MiningResource = (target as ResourceFurnitureScript).Resource
+        EndIf
     EndIf
 
     If target.GetBaseObject() as Activator && !(target.GetBaseObject() as Furniture)

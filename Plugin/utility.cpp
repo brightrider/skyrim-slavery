@@ -14,17 +14,18 @@ namespace Utility {
         }
 
         RE::BSFixedString s;
+        const char* desc = nullptr;
 
-        const char* desc = ref->GetDisplayFullName();
-        if (!desc || desc[0] == '\0' || strstr(desc, "not be visible")) {
-            desc = ref->GetBaseObject()->GetName();
+        JC::ObjectId markerDb = JC::GetMarkerDb();
+        if (markerDb > 0) {
+            s = JC::jFormMapGetStr(JC::Domain, markerDb, ref, "");
+            desc = s.c_str();
+        }
+        if (!desc || desc[0] == '\0') {
+            desc = ref->GetDisplayFullName();
             if (!desc || desc[0] == '\0' || strstr(desc, "not be visible")) {
-                JC::ObjectId markerDb = JC::GetMarkerDb();
-                if (markerDb > 0) {
-                    s = JC::jFormMapGetStr(JC::Domain, markerDb, ref, "");
-                    desc = s.c_str();
-                }
-                if (!desc || desc[0] == '\0') {
+                desc = ref->GetBaseObject()->GetName();
+                if (!desc || desc[0] == '\0' || strstr(desc, "not be visible")) {
                     desc = ref->GetFormEditorID();
                     if (!desc || desc[0] == '\0') {
                         desc = Utility::GetFormEditorID(ref->GetBaseObject()->GetFormID());
@@ -67,19 +68,54 @@ namespace Utility {
             return "unknown";
         }
 
-        for (const auto& [item, _] : actor->GetInventory()) {
-            if (item == battleaxe) return "BattleAxe";
-            if (item == greatsword) return "Greatsword";
-            if (item == mace) return "Mace";
-            if (item == sword) return "Sword";
-            if (item == waraxe) return "WarAxe";
-            if (item == warhammer) return "Warhammer";
-            if (item == bow) return "Bow";
-            if (item == crossbow) return "Crossbow";
-            if (item == whip) return "Whip";
+        RE::ExtraContainerChanges* xChanges = actor->extraList.GetByType<RE::ExtraContainerChanges>();
+        if (!xChanges) {
+            return "unknown";
+        }
+        RE::InventoryChanges* inventoryChanges = xChanges->changes;
+        if (!inventoryChanges || !inventoryChanges->entryList) {
+            return "unknown";
+        }
+        for (auto* entry : *inventoryChanges->entryList) {
+            if (!entry || entry->countDelta <= 0) {
+                continue;
+            }
+            if (entry->object == battleaxe) return "BattleAxe";
+            if (entry->object == greatsword) return "Greatsword";
+            if (entry->object == mace) return "Mace";
+            if (entry->object == sword) return "Sword";
+            if (entry->object == waraxe) return "WarAxe";
+            if (entry->object == warhammer) return "Warhammer";
+            if (entry->object == bow) return "Bow";
+            if (entry->object == crossbow) return "Crossbow";
+            if (entry->object == whip) return "Whip";
         }
 
         return "Unarmed";
+    }
+
+    std::pair<RE::TESBoundObject*, std::int32_t> GetCurrentResource(RE::Actor* actor) {
+        RE::ExtraContainerChanges* xChanges = actor->extraList.GetByType<RE::ExtraContainerChanges>();
+        if (!xChanges) {
+            return { nullptr, 0 };
+        }
+        RE::InventoryChanges* inventoryChanges = xChanges->changes;
+        if (!inventoryChanges || !inventoryChanges->entryList) {
+            return { nullptr, 0 };
+        }
+        for (auto* entry : *inventoryChanges->entryList) {
+            if (!entry || entry->countDelta <= 1 || !entry->object) {
+                continue;
+            }
+
+            if (!entry->object->As<RE::TESObjectMISC>()) {
+                continue;
+            }
+
+            return { entry->object, entry->countDelta };
+        }
+
+        return { nullptr, 0 };
     }
 
     static void ForEachReferenceInRange(RE::TES* tes, RE::TESObjectREFR* a_origin, float a_radius, std::function<RE::BSContainer::ForEachResult(RE::TESObjectREFR& a_ref)> a_callback) {

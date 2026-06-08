@@ -863,7 +863,7 @@ void __stdcall UI::MarkerListView::Render() {
     }
 
     ImGuiMCP::SameLine();
-    if (ImGuiMCP::Button("Add new marker with form")) {
+    if (ImGuiMCP::Button("Add new marker with form [DEBUG]")) {
         if (MarkerNameHasNonWhitespace(newMarkerNameBuffer)) {
             FormSelector::Open();
         }

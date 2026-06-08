@@ -1,6 +1,7 @@
 #include "actorListView.h"
 
 #include <array>
+#include <charconv>
 #include <cctype>
 #include <cstring>
 #include <memory_resource>
@@ -29,6 +30,7 @@ enum class ActorFilterField : std::uint8_t {
     Status,
     Location,
     Distance,
+    Resource,
     Task,
 };
 
@@ -40,6 +42,7 @@ static constexpr const char* kAgeAliases[] = { "age", "ag" };
 static constexpr const char* kStatusAliases[] = { "status", "st" };
 static constexpr const char* kLocationAliases[] = { "location", "lo" };
 static constexpr const char* kDistanceAliases[] = { "distance", "di" };
+static constexpr const char* kResourceAliases[] = { "resource", "re" };
 static constexpr const char* kTaskAliases[] = { "task", "ta" };
 
 static constexpr FilterFieldSpec kActorFilterFields[] = {
@@ -51,6 +54,7 @@ static constexpr FilterFieldSpec kActorFilterFields[] = {
     { static_cast<std::uint8_t>(ActorFilterField::Status), FilterFieldKind::Text, kStatusAliases, std::size(kStatusAliases), false },
     { static_cast<std::uint8_t>(ActorFilterField::Location), FilterFieldKind::Text, kLocationAliases, std::size(kLocationAliases), false },
     { static_cast<std::uint8_t>(ActorFilterField::Distance), FilterFieldKind::Number, kDistanceAliases, std::size(kDistanceAliases), false },
+    { static_cast<std::uint8_t>(ActorFilterField::Resource), FilterFieldKind::Text, kResourceAliases, std::size(kResourceAliases), true },
     { static_cast<std::uint8_t>(ActorFilterField::Task), FilterFieldKind::Text, kTaskAliases, std::size(kTaskAliases), true },
 };
 
@@ -62,6 +66,7 @@ static constexpr std::uint8_t kActorTextShorthandFieldIds[] = {
     static_cast<std::uint8_t>(ActorFilterField::Age),
     static_cast<std::uint8_t>(ActorFilterField::Status),
     static_cast<std::uint8_t>(ActorFilterField::Location),
+    static_cast<std::uint8_t>(ActorFilterField::Resource),
     static_cast<std::uint8_t>(ActorFilterField::Task),
 };
 
@@ -86,6 +91,108 @@ static const FilterRowAccess kActorFilterRowAccess{
 static constexpr const char* kActorRowDragDropPayloadType = "SS_ActorRow";
 
 static RE::Actor* g_pendingTravelActor = nullptr;
+static RE::Actor* g_pendingUseActor = nullptr;
+static RE::Actor* g_pendingPatrolActor = nullptr;
+static std::string_view g_actorListFilterResourceView;
+
+static bool g_collectResourcePopupRequested = false;
+static RE::Actor* g_collectResourceActor = nullptr;
+static RE::TESBoundObject* g_collectResourceObject = nullptr;
+static std::int32_t g_collectResourceMax = 0;
+static int g_collectResourceAmount = 0;
+static char g_collectResourcePopupLabel[160] = {};
+
+static void FormatActorResourceText(RE::Actor* actor, std::string& buf) {
+    const auto [resource, count] = Utility::GetCurrentResource(actor);
+    char countBuf[16];
+    buf.clear();
+    if (resource) {
+        if (const char* name = resource->GetName()) {
+            buf.append(name);
+        }
+    } else {
+        buf.append("NORES");
+    }
+    buf.append(" [");
+    const auto [ptr, ec] = std::to_chars(countBuf, countBuf + sizeof(countBuf), count);
+    if (ec == std::errc{}) {
+        buf.append(countBuf, ptr);
+    }
+    buf.append("]");
+}
+
+static void RequestCollectResourcePopup(RE::Actor* actor) {
+    const auto [resource, count] = Utility::GetCurrentResource(actor);
+    g_collectResourceActor = actor;
+    g_collectResourceObject = resource;
+    g_collectResourceMax = count;
+    g_collectResourceAmount = static_cast<int>(count);
+
+    char nameBuf[128] = {};
+    if (resource) {
+        if (const char* name = resource->GetName()) {
+            strncpy_s(nameBuf, name, _TRUNCATE);
+        }
+    } else {
+        strncpy_s(nameBuf, "NORES", _TRUNCATE);
+    }
+    strncpy_s(g_collectResourcePopupLabel, nameBuf, _TRUNCATE);
+    strncat_s(g_collectResourcePopupLabel, "##CollectResource", _TRUNCATE);
+
+    g_collectResourcePopupRequested = true;
+}
+
+static void OnCollectResourceConfirmed(RE::Actor* actor, RE::TESBoundObject* resource, std::int32_t amount) {
+    actor->RemoveItem(resource, amount, RE::ITEM_REMOVE_REASON::kStoreInContainer, nullptr, RE::PlayerCharacter::GetSingleton());
+}
+
+static void RenderCollectResourcePopup() {
+    if (g_collectResourcePopupRequested) {
+        ImGuiMCP::OpenPopup(g_collectResourcePopupLabel);
+        g_collectResourcePopupRequested = false;
+    }
+
+    constexpr ImGuiMCP::ImGuiWindowFlags popupFlags = ImGuiMCP::ImGuiWindowFlags_AlwaysAutoResize;
+    if (!ImGuiMCP::BeginPopupModal(g_collectResourcePopupLabel, nullptr, popupFlags)) {
+        return;
+    }
+
+    ImGuiMCP::SetNextItemWidth(240.0f);
+    ImGuiMCP::SliderInt(
+        "##CollectResourceAmount",
+        &g_collectResourceAmount,
+        0,
+        static_cast<int>(g_collectResourceMax),
+        "%d",
+        ImGuiMCP::ImGuiSliderFlags_AlwaysClamp);
+    if (ImGuiMCP::IsWindowAppearing()) {
+        ImGuiMCP::SetKeyboardFocusHere(-1);
+    }
+
+    ImGuiMCP::ImGuiIO* io = ImGuiMCP::GetIO();
+    const bool cancelShortcut = io && io->KeyCtrl && !io->KeyAlt && !io->KeySuper &&
+        ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Q, false);
+    const bool confirmPressed =
+        ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Enter, false) ||
+        ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_KeypadEnter, false);
+
+    bool closePopup = false;
+    if (confirmPressed) {
+        OnCollectResourceConfirmed(g_collectResourceActor, g_collectResourceObject, g_collectResourceAmount);
+        closePopup = true;
+    } else if (cancelShortcut) {
+        closePopup = true;
+    }
+
+    if (closePopup) {
+        g_collectResourceActor = nullptr;
+        g_collectResourceObject = nullptr;
+        g_collectResourceMax = 0;
+        ImGuiMCP::CloseCurrentPopup();
+    }
+
+    ImGuiMCP::EndPopup();
+}
 
 static RE::Actor* ActorPtrFromDragDropPayload(const ImGuiMCP::ImGuiPayload* payload) {
     if (!payload || payload->DataSize != static_cast<int>(sizeof(RE::Actor*))) {
@@ -175,6 +282,8 @@ static std::string_view ActorFilterRowText(const void* rowContext, std::uint8_t 
         return row.status;
     case ActorFilterField::Location:
         return row.location;
+    case ActorFilterField::Resource:
+        return g_actorListFilterResourceView;
     case ActorFilterField::Task:
         return row.task;
     default:
@@ -226,8 +335,15 @@ static bool FollowSubtreeMatchesFilter(
     const FilterParseResult& parseResult,
     bool fillExpensiveFields,
     std::string& taskBuffer,
+    std::string& resourceBuffer,
     ActorTableRow& row) {
     PopulateActorTableRow(actor, fillExpensiveFields ? &taskBuffer : nullptr, row);
+    if (fillExpensiveFields) {
+        FormatActorResourceText(actor, resourceBuffer);
+        g_actorListFilterResourceView = resourceBuffer;
+    } else {
+        g_actorListFilterResourceView = {};
+    }
     if (FilterMatchesExpression(parseResult, &row, kActorFilterSchema, kActorFilterRowAccess)) {
         return true;
     }
@@ -238,7 +354,7 @@ static bool FollowSubtreeMatchesFilter(
     }
 
     for (RE::Actor* child : childrenIt->second) {
-        if (FollowSubtreeMatchesFilter(child, followChildrenByParent, parseResult, fillExpensiveFields, taskBuffer, row)) {
+        if (FollowSubtreeMatchesFilter(child, followChildrenByParent, parseResult, fillExpensiveFields, taskBuffer, resourceBuffer, row)) {
             return true;
         }
     }
@@ -248,6 +364,7 @@ static bool FollowSubtreeMatchesFilter(
 
 static void RenderActorTableRow(
     const ActorTableRow& row,
+    std::string_view resourceText,
     std::string_view taskText,
     RE::Actor* actor,
     int followDepth,
@@ -313,10 +430,12 @@ static void RenderActorTableRow(
     ImGuiMCP::TableSetColumnIndex(7);
     ImGuiMCP::Text("%.2f", row.distance);
     ImGuiMCP::TableSetColumnIndex(8);
+    ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(resourceText));
+    ImGuiMCP::TableSetColumnIndex(9);
     if (!hideTaskColumn) {
         ImGuiMCP::TextUnformatted(ActorTableRowTextOrEmpty(taskText));
     }
-    ImGuiMCP::TableSetColumnIndex(9);
+    ImGuiMCP::TableSetColumnIndex(10);
     ImGuiMCP::PushID(static_cast<int>(actor->GetFormID()));
     const float actionButtonSize = ImGuiMCP::GetFrameHeight();
     const ImGuiMCP::ImVec2 actionButtonSizeVec{ actionButtonSize, actionButtonSize };
@@ -333,6 +452,8 @@ static void RenderActorTableRow(
     ImGuiMCP::SameLine();
     if (ImGuiMCP::Button("T", actionButtonSizeVec)) {
         g_pendingTravelActor = actor;
+        g_pendingUseActor = nullptr;
+        g_pendingPatrolActor = nullptr;
         UI::MarkerSelector::Open();
     }
     ImGuiMCP::SetItemTooltip("Travel");
@@ -348,6 +469,27 @@ static void RenderActorTableRow(
         );
     }
     ImGuiMCP::SetItemTooltip("Follow player");
+    ImGuiMCP::SameLine();
+    if (ImGuiMCP::Button("U", actionButtonSizeVec)) {
+        g_pendingUseActor = actor;
+        g_pendingTravelActor = nullptr;
+        g_pendingPatrolActor = nullptr;
+        UI::MarkerSelector::Open();
+    }
+    ImGuiMCP::SetItemTooltip("Use");
+    ImGuiMCP::SameLine();
+    if (ImGuiMCP::Button("P", actionButtonSizeVec)) {
+        g_pendingPatrolActor = actor;
+        g_pendingTravelActor = nullptr;
+        g_pendingUseActor = nullptr;
+        UI::MarkerSelector::Open();
+    }
+    ImGuiMCP::SetItemTooltip("Patrol");
+    ImGuiMCP::SameLine();
+    if (ImGuiMCP::Button("C", actionButtonSizeVec)) {
+        RequestCollectResourcePopup(actor);
+    }
+    ImGuiMCP::SetItemTooltip("Collect resources");
     ImGuiMCP::SameLine();
     if (ImGuiMCP::Button("X", actionButtonSizeVec)) {
         Papyrus::Call(
@@ -379,8 +521,11 @@ static void RenderFollowSubtree(
     const FollowChildrenMap& followChildrenByParent,
     bool fillExpensiveFields,
     std::string& taskBuffer,
+    std::string& resourceBuffer,
     ActorTableRow& row) {
     PopulateActorTableRow(actor, nullptr, row);
+
+    FormatActorResourceText(actor, resourceBuffer);
 
     std::string_view taskDisplay = row.task;
     if (followDepth == 0) {
@@ -390,7 +535,7 @@ static void RenderFollowSubtree(
     }
 
     const bool hideTaskColumn = followDepth > 0;
-    RenderActorTableRow(row, taskDisplay, actor, followDepth, hideTaskColumn);
+    RenderActorTableRow(row, resourceBuffer, taskDisplay, actor, followDepth, hideTaskColumn);
 
     const auto childrenIt = followChildrenByParent.find(actor);
     if (childrenIt == followChildrenByParent.end()) {
@@ -398,7 +543,7 @@ static void RenderFollowSubtree(
     }
 
     for (RE::Actor* child : childrenIt->second) {
-        RenderFollowSubtree(child, followDepth + 1, followChildrenByParent, fillExpensiveFields, taskBuffer, row);
+        RenderFollowSubtree(child, followDepth + 1, followChildrenByParent, fillExpensiveFields, taskBuffer, resourceBuffer, row);
     }
 }
 
@@ -411,6 +556,11 @@ void __stdcall UI::ActorListView::Render() {
     static std::string taskBuffer = [] {
         std::string s;
         s.reserve(128);
+        return s;
+    }();
+    static std::string resourceBuffer = [] {
+        std::string s;
+        s.reserve(64);
         return s;
     }();
 
@@ -494,9 +644,9 @@ void __stdcall UI::ActorListView::Render() {
                                                          ImGuiMCP::ImGuiTableFlags_SizingFixedFit |
                                                          ImGuiMCP::ImGuiTableFlags_ScrollY;
         const float actionButtonSize = ImGuiMCP::GetFrameHeight();
-        const float actionsColumnWidth = actionButtonSize * 4.0f + ImGuiMCP::GetStyle()->ItemSpacing.x * 3.0f +
+        const float actionsColumnWidth = actionButtonSize * 7.0f + ImGuiMCP::GetStyle()->ItemSpacing.x * 6.0f +
                                          ImGuiMCP::GetStyle()->CellPadding.x * 2.0f;
-        if (ImGuiMCP::BeginTable("ActorListTable", 10, tableFlags)) {
+        if (ImGuiMCP::BeginTable("ActorListTable", 11, tableFlags)) {
             ImGuiMCP::TableSetupColumn("Name", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 300.0f);
             ImGuiMCP::TableSetupColumn("ID");
             ImGuiMCP::TableSetupColumn("Type");
@@ -505,6 +655,7 @@ void __stdcall UI::ActorListView::Render() {
             ImGuiMCP::TableSetupColumn("Status");
             ImGuiMCP::TableSetupColumn("Location");
             ImGuiMCP::TableSetupColumn("Distance");
+            ImGuiMCP::TableSetupColumn("Resource");
             ImGuiMCP::TableSetupColumn("Task", ImGuiMCP::ImGuiTableColumnFlags_WidthStretch);
             ImGuiMCP::TableSetupColumn("", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, actionsColumnWidth);
             ImGuiMCP::TableSetupScrollFreeze(0, 1);
@@ -521,8 +672,8 @@ void __stdcall UI::ActorListView::Render() {
                 RE::Actor* currentActor = currentForm->As<RE::Actor>();
                 if (currentActor && followChildSet.find(currentActor) == followChildSet.end()) {
                     if (!applyFilter ||
-                        FollowSubtreeMatchesFilter(currentActor, followChildrenByParent, parseResult, fillExpensiveFields, taskBuffer, row)) {
-                        RenderFollowSubtree(currentActor, 0, followChildrenByParent, fillExpensiveFields, taskBuffer, row);
+                        FollowSubtreeMatchesFilter(currentActor, followChildrenByParent, parseResult, fillExpensiveFields, taskBuffer, resourceBuffer, row)) {
+                        RenderFollowSubtree(currentActor, 0, followChildrenByParent, fillExpensiveFields, taskBuffer, resourceBuffer, row);
                     }
                 }
                 currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, currentForm, nullptr);
@@ -534,20 +685,54 @@ void __stdcall UI::ActorListView::Render() {
         ImGuiMCP::EndChild();
     }
 
-    if (MarkerSelector::Window && !MarkerSelector::Window->IsOpen && g_pendingTravelActor) {
-        RE::Actor* travelActor = g_pendingTravelActor;
+    RenderCollectResourcePopup();
+
+    if (MarkerSelector::Window && !MarkerSelector::Window->IsOpen &&
+        (g_pendingTravelActor || g_pendingUseActor || g_pendingPatrolActor)) {
+        RE::Actor* pendingActor = g_pendingTravelActor
+            ? g_pendingTravelActor
+            : (g_pendingUseActor ? g_pendingUseActor : g_pendingPatrolActor);
+        const bool pendingUse = g_pendingUseActor != nullptr;
+        const bool pendingPatrol = g_pendingPatrolActor != nullptr;
         g_pendingTravelActor = nullptr;
+        g_pendingUseActor = nullptr;
+        g_pendingPatrolActor = nullptr;
 
         std::vector<RE::TESObjectREFR*> selectedMarkers;
         if (MarkerSelector::ConsumeSelectedMarkers(selectedMarkers) && !selectedMarkers.empty()) {
-            Papyrus::Call(
-                travelActor,
-                "BRSSActorScript",
-                "Travel",
-                [](RE::BSScript::Variable) {},
-                static_cast<RE::TESObjectREFR*>(selectedMarkers[0]),
-                false
-            );
+            if (pendingPatrol) {
+                if (selectedMarkers.size() >= 2) {
+                    Papyrus::Call(
+                        pendingActor,
+                        "BRSSActorScript",
+                        "Patrol",
+                        [](RE::BSScript::Variable) {},
+                        static_cast<RE::TESObjectREFR*>(selectedMarkers[0]),
+                        static_cast<RE::TESObjectREFR*>(selectedMarkers[1]),
+                        false
+                    );
+                }
+            } else if (pendingUse) {
+                Papyrus::Call(
+                    pendingActor,
+                    "BRSSActorScript",
+                    "Use",
+                    [](RE::BSScript::Variable) {},
+                    static_cast<RE::TESObjectREFR*>(selectedMarkers[0]),
+                    static_cast<RE::TESObjectREFR*>(nullptr),
+                    RE::BSFixedString(""),
+                    false
+                );
+            } else {
+                Papyrus::Call(
+                    pendingActor,
+                    "BRSSActorScript",
+                    "Travel",
+                    [](RE::BSScript::Variable) {},
+                    static_cast<RE::TESObjectREFR*>(selectedMarkers[0]),
+                    false
+                );
+            }
         }
     }
 }
