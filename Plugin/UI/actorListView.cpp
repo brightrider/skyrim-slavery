@@ -6,6 +6,7 @@
 #include <memory_resource>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "../SKSEMenuFramework.h"
 
@@ -15,6 +16,8 @@
 #include "../JCAPI.h"
 #include "../PAPI.h"
 #include "../utility.h"
+
+#include "markerSelector.h"
 
 enum class ActorFilterField : std::uint8_t {
     Unknown = 0,
@@ -81,6 +84,8 @@ static const FilterRowAccess kActorFilterRowAccess{
 };
 
 static constexpr const char* kActorRowDragDropPayloadType = "SS_ActorRow";
+
+static RE::Actor* g_pendingTravelActor = nullptr;
 
 static RE::Actor* ActorPtrFromDragDropPayload(const ImGuiMCP::ImGuiPayload* payload) {
     if (!payload || payload->DataSize != static_cast<int>(sizeof(RE::Actor*))) {
@@ -326,6 +331,12 @@ static void RenderActorTableRow(
     }
     ImGuiMCP::SetItemTooltip("Wait");
     ImGuiMCP::SameLine();
+    if (ImGuiMCP::Button("T", actionButtonSizeVec)) {
+        g_pendingTravelActor = actor;
+        UI::MarkerSelector::Open();
+    }
+    ImGuiMCP::SetItemTooltip("Travel");
+    ImGuiMCP::SameLine();
     if (ImGuiMCP::Button("F", actionButtonSizeVec)) {
         Papyrus::Call(
             actor,
@@ -483,7 +494,7 @@ void __stdcall UI::ActorListView::Render() {
                                                          ImGuiMCP::ImGuiTableFlags_SizingFixedFit |
                                                          ImGuiMCP::ImGuiTableFlags_ScrollY;
         const float actionButtonSize = ImGuiMCP::GetFrameHeight();
-        const float actionsColumnWidth = actionButtonSize * 3.0f + ImGuiMCP::GetStyle()->ItemSpacing.x * 2.0f +
+        const float actionsColumnWidth = actionButtonSize * 4.0f + ImGuiMCP::GetStyle()->ItemSpacing.x * 3.0f +
                                          ImGuiMCP::GetStyle()->CellPadding.x * 2.0f;
         if (ImGuiMCP::BeginTable("ActorListTable", 10, tableFlags)) {
             ImGuiMCP::TableSetupColumn("Name", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 300.0f);
@@ -521,5 +532,22 @@ void __stdcall UI::ActorListView::Render() {
         }
         AcceptActorRowDragDropAtTarget(nullptr);
         ImGuiMCP::EndChild();
+    }
+
+    if (MarkerSelector::Window && !MarkerSelector::Window->IsOpen && g_pendingTravelActor) {
+        RE::Actor* travelActor = g_pendingTravelActor;
+        g_pendingTravelActor = nullptr;
+
+        std::vector<RE::TESObjectREFR*> selectedMarkers;
+        if (MarkerSelector::ConsumeSelectedMarkers(selectedMarkers) && !selectedMarkers.empty()) {
+            Papyrus::Call(
+                travelActor,
+                "BRSSActorScript",
+                "Travel",
+                [](RE::BSScript::Variable) {},
+                static_cast<RE::TESObjectREFR*>(selectedMarkers[0]),
+                false
+            );
+        }
     }
 }

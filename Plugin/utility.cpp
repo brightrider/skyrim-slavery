@@ -1,5 +1,6 @@
 #include "utility.h"
 
+#include <charconv>
 #include <windows.h>
 
 #include "JCAPI.h"
@@ -167,6 +168,8 @@ namespace Utility {
         return result;
     }
 
+    static constexpr float kTravelArrivedDistanceThreshold = 256.0f;
+
     void CreateTaskDescription(RE::Actor* actor, std::string& buf) {
         RE::TESDataHandler* dh = RE::TESDataHandler::GetSingleton();
         if (!dh) {
@@ -186,8 +189,10 @@ namespace Utility {
         }
         char nameP1[128];
         char nameP2[128];
-        Utility::GetName(actor->GetLinkedRef(BRSS_PackageKeyword1), nameP1, sizeof(nameP1));
-        Utility::GetName(actor->GetLinkedRef(BRSS_PackageKeyword2), nameP2, sizeof(nameP2));
+        RE::TESObjectREFR* linkP1 = actor->GetLinkedRef(BRSS_PackageKeyword1);
+        RE::TESObjectREFR* linkP2 = actor->GetLinkedRef(BRSS_PackageKeyword2);
+        Utility::GetName(linkP1, nameP1, sizeof(nameP1));
+        Utility::GetName(linkP2, nameP2, sizeof(nameP2));
         switch (procedureCode) {
             case 0:
                 buf.append("Idle");
@@ -196,6 +201,20 @@ namespace Utility {
             case 1:
                 buf.append("Traveling to ");
                 buf.append(nameP1);
+                buf.append(" [");
+                if (linkP1) {
+                    const float distance = actor->GetPosition().GetDistance(linkP1->GetPosition());
+                    if (distance < kTravelArrivedDistanceThreshold) {
+                        buf.append("ARRIVED");
+                    } else {
+                        char distBuf[32];
+                        auto [ptr, ec] = std::to_chars(distBuf, distBuf + sizeof(distBuf), distance, std::chars_format::fixed, 2);
+                        if (ec == std::errc{}) {
+                            buf.append(distBuf, ptr);
+                        }
+                    }
+                }
+                buf.append("]");
                 break;
 
             case 2:
