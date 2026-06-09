@@ -40,7 +40,7 @@ namespace Papyrus
             return false;
         }
 
-        auto papyrusArgs = RE::MakeFunctionArguments(std::forward<Args>(args)...);
+        auto papyrusArgs = RE::MakeFunctionArguments(std::decay_t<Args>(std::forward<Args>(args))...);
 
         RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback(
             new RawCallback<std::remove_cvref_t<F>>(std::forward<F>(resultCallback))

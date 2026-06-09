@@ -120,7 +120,7 @@ EndFunction
 Function CreateGrid(String name, Int[] grid, Int width, Form markerForm=None, Int offX=128, Int offY=384)
     Int i = 0
     While i < grid.Length
-        ObjectReference marker = Add(name + i, markerForm)
+        ObjectReference marker = Add("grid_" + name + "_" + i, markerForm)
 
         Int newX = offX * (i % width)
         Int newY = offY * (i / width)
@@ -134,7 +134,7 @@ EndFunction
 Function DestroyGrid(String name)
     Int i = 0
     While True
-        If ! Remove(name + i)
+        If ! Remove("grid_" + name + "_" + i)
             Return
         EndIf
 

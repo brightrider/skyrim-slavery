@@ -2,8 +2,13 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cfloat>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <memory_resource>
+#include <vector>
 
 #include "../SKSEMenuFramework.h"
 
@@ -606,6 +611,353 @@ static void RenderMarkerRenamePopup(RE::TESQuest* markerControllerScript) {
     ImGuiMCP::EndPopup();
 }
 
+struct MarkerGridConfig {
+    std::string name;
+    std::int32_t width = 2;
+    std::vector<std::int32_t> rotations;
+    std::int32_t offX = 128;
+    std::int32_t offY = 384;
+    RE::TESForm* form = nullptr;
+};
+
+static char markerGridNameBuffer[128] = {};
+static bool markerGridPopupRequested = false;
+static bool markerGridFormSelectorPending = false;
+static RE::TESForm* markerGridSelectedForm = nullptr;
+static std::int32_t markerGridWidth = 2;
+static std::int32_t markerGridRows = 2;
+static constexpr std::int32_t kMarkerGridDefaultOffX = 128;
+static constexpr std::int32_t kMarkerGridDefaultOffY = 384;
+static std::int32_t markerGridOffX = kMarkerGridDefaultOffX;
+static std::int32_t markerGridOffY = kMarkerGridDefaultOffY;
+static std::vector<std::int32_t> markerGridRotations(4, 0);
+
+static void SyncMarkerGridRotations() {
+    markerGridWidth = std::max(1, markerGridWidth);
+    markerGridRows = std::max(1, markerGridRows);
+    const std::size_t count =
+        static_cast<std::size_t>(markerGridWidth) * static_cast<std::size_t>(markerGridRows);
+    if (markerGridRotations.size() < count) {
+        markerGridRotations.resize(count, 0);
+    } else if (markerGridRotations.size() > count) {
+        markerGridRotations.resize(count);
+    }
+}
+
+static void RequestMarkerGridPopup(const char* name, RE::TESForm* form = nullptr) {
+    strncpy_s(markerGridNameBuffer, sizeof(markerGridNameBuffer), name ? name : "", _TRUNCATE);
+    markerGridWidth = 2;
+    markerGridRows = 2;
+    markerGridOffX = kMarkerGridDefaultOffX;
+    markerGridOffY = kMarkerGridDefaultOffY;
+    markerGridRotations.assign(4, 0);
+    markerGridSelectedForm = form;
+    markerGridPopupRequested = true;
+}
+
+static bool IsMarkerGridConfigValid(
+    const char* name, std::int32_t width, std::int32_t rows, std::int32_t offX, std::int32_t offY) {
+    if (!MarkerNameHasNonWhitespace(name)) {
+        return false;
+    }
+    if (width < 1 || rows < 1) {
+        return false;
+    }
+    if (offX < 1 || offY < 1) {
+        return false;
+    }
+    return true;
+}
+
+static void CycleMarkerGridRotation(std::int32_t& rotation) {
+    rotation += 45;
+    if (rotation >= 360) {
+        rotation = 0;
+    }
+}
+
+static void CycleMarkerGridRowRotation(std::int32_t width, std::int32_t row, std::vector<std::int32_t>& rotations) {
+    const std::int32_t rowStart = row * width;
+    for (std::int32_t col = 0; col < width; ++col) {
+        CycleMarkerGridRotation(rotations[static_cast<std::size_t>(rowStart + col)]);
+    }
+}
+
+static void CycleMarkerGridColumnRotation(
+    std::int32_t width, std::int32_t rows, std::int32_t col, std::vector<std::int32_t>& rotations) {
+    for (std::int32_t row = 0; row < rows; ++row) {
+        CycleMarkerGridRotation(rotations[static_cast<std::size_t>(row * width + col)]);
+    }
+}
+
+static void ResetMarkerGridRotations(std::vector<std::int32_t>& rotations) {
+    for (std::int32_t& rotation : rotations) {
+        rotation = 0;
+    }
+}
+
+static void DrawMarkerGridDirectionArrow(ImGuiMCP::ImDrawList* drawList, ImGuiMCP::ImVec2 center, float radius,
+    int rotationDeg, ImGuiMCP::ImU32 color) {
+    constexpr float kPi = 3.14159265f;
+    const float rad = (static_cast<float>(rotationDeg) - 90.0f) * kPi / 180.0f;
+    const ImGuiMCP::ImVec2 tip{
+        center.x + std::cos(rad) * radius,
+        center.y + std::sin(rad) * radius,
+    };
+    const float backRad1 = rad + 2.4f;
+    const float backRad2 = rad - 2.4f;
+    const float tail = radius * 0.55f;
+    const ImGuiMCP::ImVec2 tail1{
+        center.x + std::cos(backRad1) * tail,
+        center.y + std::sin(backRad1) * tail,
+    };
+    const ImGuiMCP::ImVec2 tail2{
+        center.x + std::cos(backRad2) * tail,
+        center.y + std::sin(backRad2) * tail,
+    };
+    ImGuiMCP::ImDrawListManager::AddTriangleFilled(drawList, tip, tail1, tail2, color);
+    ImGuiMCP::ImDrawListManager::AddCircleFilled(drawList, center, radius * 0.15f, color, 12);
+}
+
+static void OnMarkerGridConfirmed(RE::TESQuest* markerControllerScript, MarkerGridConfig config) {
+    Papyrus::Call(
+        markerControllerScript,
+        "BRSSMarkerControllerScript",
+        "CreateGrid",
+        [](RE::BSScript::Variable) {},
+        std::move(config.name),
+        std::move(config.rotations),
+        config.width,
+        static_cast<RE::TESForm*>(config.form),
+        config.offX,
+        config.offY
+    );
+}
+
+static void RenderMarkerGridLabeledInputInt(float baseX, float baseY, const char* label, const char* id, int* value,
+    float labelWidth, float inputWidth, int step, int stepFast) {
+    ImGuiMCP::SetCursorPos(ImGuiMCP::ImVec2{ baseX, baseY });
+    ImGuiMCP::AlignTextToFramePadding();
+    ImGuiMCP::TextUnformatted(label);
+    ImGuiMCP::SameLine(baseX + labelWidth);
+    ImGuiMCP::SetNextItemWidth(inputWidth);
+    ImGuiMCP::InputInt(id, value, step, stepFast);
+}
+
+static void RenderMarkerGridOffsetInputInt(float baseX, float baseY, const char* label, const char* inputId,
+    const char* defaultBtnId, int* value, int defaultValue, float labelWidth, float inputWidth, int step, int stepFast) {
+    const float defaultBtnSize = ImGuiMCP::GetFrameHeight();
+    const float fieldInputW = inputWidth - defaultBtnSize - 4.0f;
+
+    ImGuiMCP::SetCursorPos(ImGuiMCP::ImVec2{ baseX, baseY });
+    ImGuiMCP::AlignTextToFramePadding();
+    ImGuiMCP::TextUnformatted(label);
+    ImGuiMCP::SameLine(baseX + labelWidth);
+    ImGuiMCP::SetNextItemWidth(fieldInputW);
+    ImGuiMCP::InputInt(inputId, value, step, stepFast);
+    ImGuiMCP::SameLine(0.0f, 4.0f);
+    if (ImGuiMCP::Button(defaultBtnId, ImGuiMCP::ImVec2{ defaultBtnSize, defaultBtnSize })) {
+        *value = defaultValue;
+    }
+}
+
+static void RenderMarkerGridPopup(char* newMarkerNameBuffer, RE::TESQuest* markerControllerScript) {
+    constexpr float kPopupW = 960.0f;
+    constexpr float kPopupH = 870.0f;
+    constexpr float kMinPopupW = 780.0f;
+    constexpr float kMinPopupH = 630.0f;
+    constexpr float kArrowRadiusPx = 22.0f;
+    constexpr float kArrowHitPadPx = 10.0f;
+    constexpr float kRowStartX = 12.0f;
+    constexpr float kLabelWidth = 80.0f;
+    constexpr float kInputWidth = 200.0f;
+    constexpr float kColumnGap = 24.0f;
+    constexpr float kSecondPairX = kRowStartX + kLabelWidth + kInputWidth + kColumnGap;
+    constexpr float kGridPad = 6.0f;
+    constexpr float kMinPreviewH = 180.0f;
+
+    if (markerGridPopupRequested) {
+        ImGuiMCP::SetNextWindowSize(ImGuiMCP::ImVec2{ kPopupW, kPopupH }, ImGuiMCP::ImGuiCond_Appearing);
+        ImGuiMCP::SetNextWindowSizeConstraints(
+            ImGuiMCP::ImVec2{ kMinPopupW, kMinPopupH }, ImGuiMCP::ImVec2{ FLT_MAX, FLT_MAX });
+        ImGuiMCP::OpenPopup("New marker grid");
+        markerGridPopupRequested = false;
+    }
+
+    if (!ImGuiMCP::BeginPopupModal("New marker grid", nullptr, 0)) {
+        return;
+    }
+
+    SyncMarkerGridRotations();
+
+    ImGuiMCP::Text("Name: %s", markerGridNameBuffer);
+    ImGuiMCP::Spacing();
+
+    const float dimRowY = ImGuiMCP::GetCursorPosY();
+    const float rowStep = ImGuiMCP::GetFrameHeightWithSpacing();
+    RenderMarkerGridLabeledInputInt(
+        kRowStartX, dimRowY, "Columns", "##MarkerGridCols", &markerGridWidth, kLabelWidth, kInputWidth, 1, 1);
+    RenderMarkerGridLabeledInputInt(
+        kSecondPairX, dimRowY, "Rows", "##MarkerGridRows", &markerGridRows, kLabelWidth, kInputWidth, 1, 1);
+    SyncMarkerGridRotations();
+
+    const float offsetRowY = dimRowY + rowStep;
+    RenderMarkerGridOffsetInputInt(kRowStartX, offsetRowY, "Offset X", "##MarkerGridOffX", "D##MarkerGridOffXDefault",
+        &markerGridOffX, kMarkerGridDefaultOffX, kLabelWidth, kInputWidth, 8, 64);
+    RenderMarkerGridOffsetInputInt(kSecondPairX, offsetRowY, "Offset Y", "##MarkerGridOffY", "D##MarkerGridOffYDefault",
+        &markerGridOffY, kMarkerGridDefaultOffY, kLabelWidth, kInputWidth, 8, 64);
+    ImGuiMCP::SetCursorPosY(offsetRowY + rowStep);
+    ImGuiMCP::TextDisabled("Ctrl+click: row  |  Alt+click: column  |  Ctrl+R: reset rotations");
+
+    ImGuiMCP::Spacing();
+
+    ImGuiMCP::ImVec2 previewRegionAvail{};
+    ImGuiMCP::GetContentRegionAvail(&previewRegionAvail);
+    const float previewChildH = std::max(kMinPreviewH, previewRegionAvail.y);
+
+    if (ImGuiMCP::BeginChild(
+            "##MarkerGridPreview", ImGuiMCP::ImVec2{ -1.0f, previewChildH }, ImGuiMCP::ImGuiChildFlags_Border)) {
+        ImGuiMCP::ImVec2 canvasAvail{};
+        ImGuiMCP::GetContentRegionAvail(&canvasAvail);
+        const float canvasW = std::max(1.0f, canvasAvail.x);
+        const float canvasH = std::max(1.0f, canvasAvail.y);
+        constexpr float kPixelPerUnit = 0.45f;
+        const float edgeMargin = kArrowRadiusPx + 6.0f;
+        const float usableW = std::max(1.0f, canvasW - kGridPad * 2.0f - edgeMargin * 2.0f);
+        const float usableH = std::max(1.0f, canvasH - kGridPad * 2.0f - edgeMargin * 2.0f);
+
+        float spacingX = static_cast<float>(markerGridOffX) * kPixelPerUnit;
+        float spacingY = static_cast<float>(markerGridOffY) * kPixelPerUnit;
+        float drawW = markerGridWidth > 1 ? static_cast<float>(markerGridWidth - 1) * spacingX : 0.0f;
+        float drawH = markerGridRows > 1 ? static_cast<float>(markerGridRows - 1) * spacingY : 0.0f;
+
+        float overflowScale = 1.0f;
+        if (drawW > usableW) {
+            overflowScale = std::min(overflowScale, usableW / drawW);
+        }
+        if (drawH > usableH) {
+            overflowScale = std::min(overflowScale, usableH / drawH);
+        }
+        spacingX *= overflowScale;
+        spacingY *= overflowScale;
+        drawW *= overflowScale;
+        drawH *= overflowScale;
+
+        ImGuiMCP::InvisibleButton("##MarkerGridCanvas", ImGuiMCP::ImVec2{ canvasW, canvasH });
+
+        ImGuiMCP::ImVec2 canvasMin{};
+        ImGuiMCP::GetItemRectMin(&canvasMin);
+        const float firstMarkerX = canvasMin.x + kGridPad + edgeMargin + (usableW - drawW) * 0.5f;
+        const float firstMarkerY = canvasMin.y + kGridPad + edgeMargin + (usableH - drawH) * 0.5f;
+
+        const auto markerCenter = [&](int col, int row) {
+            return ImGuiMCP::ImVec2{
+                firstMarkerX + static_cast<float>(col) * spacingX,
+                firstMarkerY + static_cast<float>(markerGridRows - 1 - row) * spacingY,
+            };
+        };
+
+        if (ImGuiMCP::IsItemClicked()) {
+            ImGuiMCP::ImGuiIO* clickIo = ImGuiMCP::GetIO();
+            const bool ctrlHeld = clickIo && (clickIo->KeyCtrl || clickIo->KeySuper);
+            const bool altHeld = clickIo && clickIo->KeyAlt;
+
+            ImGuiMCP::ImVec2 mousePos{};
+            ImGuiMCP::GetMousePos(&mousePos);
+            const float hitRadius = kArrowRadiusPx + kArrowHitPadPx;
+            const float hitRadiusSq = hitRadius * hitRadius;
+            int bestIndex = -1;
+            float bestDistSq = hitRadiusSq;
+            for (int row = 0; row < markerGridRows; ++row) {
+                for (int col = 0; col < markerGridWidth; ++col) {
+                    const ImGuiMCP::ImVec2 center = markerCenter(col, row);
+                    const float dx = mousePos.x - center.x;
+                    const float dy = mousePos.y - center.y;
+                    const float distSq = dx * dx + dy * dy;
+                    if (distSq <= bestDistSq) {
+                        bestDistSq = distSq;
+                        bestIndex = row * markerGridWidth + col;
+                    }
+                }
+            }
+            if (bestIndex >= 0) {
+                const int col = bestIndex % markerGridWidth;
+                const int row = bestIndex / markerGridWidth;
+                if (altHeld && !ctrlHeld) {
+                    CycleMarkerGridColumnRotation(markerGridWidth, markerGridRows, col, markerGridRotations);
+                } else if (ctrlHeld && !altHeld) {
+                    CycleMarkerGridRowRotation(markerGridWidth, row, markerGridRotations);
+                } else {
+                    CycleMarkerGridRotation(markerGridRotations[static_cast<std::size_t>(bestIndex)]);
+                }
+            }
+        }
+
+        ImGuiMCP::ImDrawList* drawList = ImGuiMCP::GetWindowDrawList();
+        const ImGuiMCP::ImU32 arrowCol = IM_COL32(120, 200, 255, 255);
+        const ImGuiMCP::ImU32 indexCol = IM_COL32(180, 180, 180, 200);
+
+        for (int row = 0; row < markerGridRows; ++row) {
+            for (int col = 0; col < markerGridWidth; ++col) {
+                const int index = row * markerGridWidth + col;
+                const ImGuiMCP::ImVec2 center = markerCenter(col, row);
+                DrawMarkerGridDirectionArrow(
+                    drawList, center, kArrowRadiusPx, markerGridRotations[static_cast<std::size_t>(index)], arrowCol);
+
+                char indexLabel[16] = {};
+                std::snprintf(indexLabel, sizeof(indexLabel), "%d", index);
+                ImGuiMCP::ImDrawListManager::AddText(
+                    drawList,
+                    ImGuiMCP::ImVec2{ center.x + kArrowRadiusPx + 4.0f, center.y - kArrowRadiusPx },
+                    indexCol,
+                    indexLabel);
+            }
+        }
+
+        ImGuiMCP::EndChild();
+    }
+
+    ImGuiMCP::ImGuiIO* io = ImGuiMCP::GetIO();
+    const bool ctrlShortcut = io && io->KeyCtrl && !io->KeyAlt && !io->KeySuper;
+    const bool cancelShortcut = ctrlShortcut && ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Q, false);
+    const bool resetRotationsShortcut = ctrlShortcut && ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_R, false);
+    const bool confirmPressed =
+        ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Enter, false) ||
+        ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_KeypadEnter, false);
+
+    if (resetRotationsShortcut) {
+        ResetMarkerGridRotations(markerGridRotations);
+    }
+
+    bool closePopup = false;
+    if (cancelShortcut) {
+        closePopup = true;
+    } else if (confirmPressed &&
+        IsMarkerGridConfigValid(
+            markerGridNameBuffer, markerGridWidth, markerGridRows, markerGridOffX, markerGridOffY)) {
+        MarkerGridConfig config;
+        config.name = markerGridNameBuffer;
+        config.width = markerGridWidth;
+        config.rotations = markerGridRotations;
+        config.offX = markerGridOffX;
+        config.offY = markerGridOffY;
+        config.form = markerGridSelectedForm;
+        OnMarkerGridConfirmed(markerControllerScript, std::move(config));
+        markerGridSelectedForm = nullptr;
+        if (newMarkerNameBuffer) {
+            newMarkerNameBuffer[0] = '\0';
+        }
+        closePopup = true;
+    }
+
+    if (closePopup) {
+        markerGridSelectedForm = nullptr;
+        ImGuiMCP::CloseCurrentPopup();
+    }
+
+    ImGuiMCP::EndPopup();
+}
+
 static void CollapsedHeader(const char* label, const void* uniqueId, std::string_view markerName,
     RE::TESQuest* markerControllerScript, const RevLinks* links, MarkerHeaderOpenForce openForce) {
     ImGuiMCP::PushID(uniqueId);
@@ -712,7 +1064,7 @@ void __stdcall UI::MarkerListView::Render() {
     ImGuiMCP::SetNextItemWidth(-1.0f);
     ImGuiMCP::InputTextWithHint("##MarkerListFilter", "Filter...", filterBuffer, sizeof(filterBuffer));
     ImGuiMCP::TextDisabled(
-        "Ctrl+L: focus filter  |  e.g. todo");
+        "Ctrl+L: focus filter  |  Ctrl+M: focus marker name  |  e.g. todo");
     if (std::strcmp(filterBuffer, lastTokenizedFilter) != 0) {
         strncpy_s(lastTokenizedFilter, filterBuffer, sizeof(lastTokenizedFilter));
         lastTokenizedFilter[sizeof(lastTokenizedFilter) - 1] = '\0';
@@ -828,6 +1180,12 @@ void __stdcall UI::MarkerListView::Render() {
 
     ImGuiMCP::Separator();
     ImGuiMCP::Spacing();
+    const bool focusNewMarkerNameShortcut = io && io->KeyCtrl && !io->KeyAlt && !io->KeySuper &&
+        ImGuiMCP::IsWindowFocused(ImGuiMCP::ImGuiFocusedFlags_RootAndChildWindows) &&
+        ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_M, false);
+    if (focusNewMarkerNameShortcut) {
+        ImGuiMCP::SetKeyboardFocusHere();
+    }
     ImGuiMCP::SetNextItemWidth(420.0f);
     const bool newMarkerNameEdited = ImGuiMCP::InputTextWithHint(
         "##NewMarkerName",
@@ -865,16 +1223,38 @@ void __stdcall UI::MarkerListView::Render() {
     ImGuiMCP::SameLine();
     if (ImGuiMCP::Button("Add new marker with form [DEBUG]")) {
         if (MarkerNameHasNonWhitespace(newMarkerNameBuffer)) {
+            markerGridFormSelectorPending = false;
             FormSelector::Open();
         }
     }
 
     if (FormSelector::Window && !FormSelector::Window->IsOpen) {
         RE::TESForm* selectedForm = nullptr;
-        if (FormSelector::ConsumeSelectedForm(selectedForm)) {
+        const bool hasSelection = FormSelector::ConsumeSelectedForm(selectedForm);
+        if (markerGridFormSelectorPending) {
+            markerGridFormSelectorPending = false;
+            if (hasSelection) {
+                RequestMarkerGridPopup(newMarkerNameBuffer, selectedForm);
+            }
+        } else if (hasSelection) {
             addNewMarker(selectedForm);
         }
     }
 
+    ImGuiMCP::SameLine();
+    if (ImGuiMCP::Button("Add new marker grid")) {
+        if (MarkerNameHasNonWhitespace(newMarkerNameBuffer)) {
+            RequestMarkerGridPopup(newMarkerNameBuffer);
+        }
+    }
+    ImGuiMCP::SameLine();
+    if (ImGuiMCP::Button("Add new marker grid with form [DEBUG]")) {
+        if (MarkerNameHasNonWhitespace(newMarkerNameBuffer)) {
+            markerGridFormSelectorPending = true;
+            FormSelector::Open();
+        }
+    }
+
+    RenderMarkerGridPopup(newMarkerNameBuffer, BRSS_MarkerControllerScript);
     RenderMarkerRenamePopup(BRSS_MarkerControllerScript);
 }

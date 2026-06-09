@@ -229,8 +229,8 @@ Function ExecutionSetup(Actor[] guards, Actor[] slaves, String markerGridName)
     While i < guards.Length
         BRSSActorScript guard = guards[i] as BRSSActorScript
         BRSSActorScript slave = slaves[i] as BRSSActorScript
-        guard.Use(markerController.Get(markerGridName + i), slave)
-        slave.Use(markerController.Get(markerGridName + (guards.Length + i)))
+        guard.Use(markerController.Get("grid_" + markerGridName + "_" + i), slave)
+        slave.Use(markerController.Get("grid_" + markerGridName + "_" + (guards.Length + i)))
         i += 1
     EndWhile
 EndFunction
