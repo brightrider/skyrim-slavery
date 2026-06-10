@@ -63,10 +63,10 @@ std::vector<RE::Actor*> GetActors(RE::StaticFunctionTag*, const RE::TESFaction* 
                             continue;
                         }
 
-                        bool result = std::ranges::any_of(a_displayNames, [displayName](const std::string& e) {
+                        bool nameMatches = std::ranges::any_of(a_displayNames, [displayName](const std::string& e) {
                             return _stricmp(e.c_str(), displayName) == 0;
                         });
-                        if (!result) {
+                        if (!nameMatches) {
                             continue;
                         }
                     }

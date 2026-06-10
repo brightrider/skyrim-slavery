@@ -21,7 +21,8 @@
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
-        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake"
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake",
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/build/v"
       }
     },
     {
