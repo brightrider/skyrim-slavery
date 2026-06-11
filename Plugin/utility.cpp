@@ -118,6 +118,18 @@ namespace Utility {
         return { nullptr, 0 };
     }
 
+    void SetHealth(RE::Actor* actor, float value) {
+        RE::ActorValueOwner* avOwner = actor->AsActorValueOwner();
+        if (!avOwner) {
+            return;
+        }
+
+        avOwner->ModActorValue(
+            RE::ActorValue::kHealth,
+            value - avOwner->GetActorValue(RE::ActorValue::kHealth)
+        );
+    }
+
     static void ForEachReferenceInRange(RE::TES* tes, RE::TESObjectREFR* a_origin, float a_radius, std::function<RE::BSContainer::ForEachResult(RE::TESObjectREFR& a_ref)> a_callback) {
 		if (a_origin && a_radius > 0.0f) {
 			const auto originPos = a_origin->GetPosition();

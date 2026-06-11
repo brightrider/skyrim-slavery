@@ -1,5 +1,6 @@
 #include "markerSelector.h"
 
+#include <algorithm>
 #include <cstring>
 #include <unordered_set>
 #include <vector>
@@ -58,7 +59,7 @@ static constexpr FilterSchema kMarkerSelectorFilterSchema{
     kMarkerSelectorFilterShorthand,
 };
 
-static std::unordered_set<RE::TESObjectREFR*> g_pendingSelection;
+static std::vector<RE::TESObjectREFR*> g_pendingSelection;
 static std::vector<RE::TESObjectREFR*> g_confirmedMarkers;
 static bool g_hasConfirmedSelection = false;
 static char g_filterBuffer[256] = {};
@@ -205,28 +206,40 @@ static void CollectVisibleMarkers(std::vector<RE::TESObjectREFR*>& outMarkers, b
     }
 }
 
+static bool PendingSelectionContains(RE::TESObjectREFR* marker) {
+    return std::find(g_pendingSelection.begin(), g_pendingSelection.end(), marker) !=
+        g_pendingSelection.end();
+}
+
+static void PendingSelectionRemove(RE::TESObjectREFR* marker) {
+    const auto it = std::find(g_pendingSelection.begin(), g_pendingSelection.end(), marker);
+    if (it != g_pendingSelection.end()) {
+        g_pendingSelection.erase(it);
+    }
+}
+
 static void UpdateSelectionOnRowClick(RE::TESObjectREFR* marker) {
-    const bool wasSelected = g_pendingSelection.contains(marker);
+    const bool wasSelected = PendingSelectionContains(marker);
     ImGuiMCP::ImGuiIO* io = ImGuiMCP::GetIO();
     const bool ctrlHeld = io && (io->KeyCtrl || io->KeySuper);
 
     if (ctrlHeld) {
         if (wasSelected) {
-            g_pendingSelection.erase(marker);
+            PendingSelectionRemove(marker);
         } else {
-            g_pendingSelection.insert(marker);
+            g_pendingSelection.push_back(marker);
         }
         return;
     }
 
     g_pendingSelection.clear();
     if (!wasSelected) {
-        g_pendingSelection.insert(marker);
+        g_pendingSelection.push_back(marker);
     }
 }
 
 static void RenderMarkerSelectorTableRow(const MarkerTableRow& row, RE::TESObjectREFR* marker) {
-    const bool selected = g_pendingSelection.contains(marker);
+    const bool selected = PendingSelectionContains(marker);
 
     ImGuiMCP::TableNextRow();
     ImGuiMCP::PushID(static_cast<int>(marker->GetFormID()));

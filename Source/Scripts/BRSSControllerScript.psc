@@ -72,8 +72,8 @@ BRSSActorScript Function AddActor(String actorType, String name="", String actor
         If weaponIdx == -1
             weaponIdx = Utility.RandomInt(0, 7)
         EndIf
-        newActor.AddItem(GetWeaponByIdx(weaponIdx), abSilent=True)
-        newActor.AddItem(GetWeaponAddonByIdx(weaponIdx), abSilent=True)
+        newActor.EquipItem(GetWeaponByIdx(weaponIdx), abPreventRemoval=True, abSilent=True)
+        newActor.EquipItem(GetWeaponAddonByIdx(weaponIdx), abPreventRemoval=True, abSilent=True)
     ElseIf actorType == "Slave"
         If ! SelectNpcTemplateList(actorRace, isVampire, False)
             ReleaseLock()

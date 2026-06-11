@@ -1,5 +1,6 @@
 #include "actorSelector.h"
 
+#include <algorithm>
 #include <cstring>
 #include <unordered_set>
 #include <vector>
@@ -66,7 +67,7 @@ static constexpr FilterSchema kActorSelectorFilterSchema{
     kActorSelectorFilterShorthand,
 };
 
-static std::unordered_set<RE::Actor*> g_pendingSelection;
+static std::vector<RE::Actor*> g_pendingSelection;
 static std::vector<RE::Actor*> g_confirmedActors;
 static bool g_hasConfirmedSelection = false;
 static char g_filterBuffer[256] = {};
@@ -201,28 +202,39 @@ static void CollectVisibleActors(std::vector<RE::Actor*>& outActors, bool applyF
     }
 }
 
+static bool PendingSelectionContains(RE::Actor* actor) {
+    return std::find(g_pendingSelection.begin(), g_pendingSelection.end(), actor) != g_pendingSelection.end();
+}
+
+static void PendingSelectionRemove(RE::Actor* actor) {
+    const auto it = std::find(g_pendingSelection.begin(), g_pendingSelection.end(), actor);
+    if (it != g_pendingSelection.end()) {
+        g_pendingSelection.erase(it);
+    }
+}
+
 static void UpdateSelectionOnRowClick(RE::Actor* actor) {
-    const bool wasSelected = g_pendingSelection.contains(actor);
+    const bool wasSelected = PendingSelectionContains(actor);
     ImGuiMCP::ImGuiIO* io = ImGuiMCP::GetIO();
     const bool ctrlHeld = io && (io->KeyCtrl || io->KeySuper);
 
     if (ctrlHeld) {
         if (wasSelected) {
-            g_pendingSelection.erase(actor);
+            PendingSelectionRemove(actor);
         } else {
-            g_pendingSelection.insert(actor);
+            g_pendingSelection.push_back(actor);
         }
         return;
     }
 
     g_pendingSelection.clear();
     if (!wasSelected) {
-        g_pendingSelection.insert(actor);
+        g_pendingSelection.push_back(actor);
     }
 }
 
 static void RenderActorSelectorTableRow(const ActorTableRow& row, RE::Actor* actor) {
-    const bool selected = g_pendingSelection.contains(actor);
+    const bool selected = PendingSelectionContains(actor);
 
     ImGuiMCP::TableNextRow();
     ImGuiMCP::PushID(static_cast<int>(actor->GetFormID()));
