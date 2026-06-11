@@ -474,7 +474,7 @@ static void RenderActorTableRow(
         g_pendingUseActor = actor;
         g_pendingTravelActor = nullptr;
         g_pendingPatrolActor = nullptr;
-        UI::MarkerSelector::Open();
+        UI::MarkerSelector::Open("1024");
     }
     ImGuiMCP::SetItemTooltip("Use");
     ImGuiMCP::SameLine();
@@ -482,7 +482,7 @@ static void RenderActorTableRow(
         g_pendingPatrolActor = actor;
         g_pendingTravelActor = nullptr;
         g_pendingUseActor = nullptr;
-        UI::MarkerSelector::Open();
+        UI::MarkerSelector::Open("1024");
     }
     ImGuiMCP::SetItemTooltip("Patrol");
     ImGuiMCP::SameLine();
@@ -581,17 +581,22 @@ void __stdcall UI::ActorListView::Render() {
     }
 
     ImGuiMCP::ImGuiIO* io = ImGuiMCP::GetIO();
+    constexpr ImGuiMCP::ImGuiInputFlags kFilterShortcutRoute =
+        ImGuiMCP::ImGuiInputFlags_RouteFocused | ImGuiMCP::ImGuiInputFlags_RouteOverActive;
     const bool focusFilterShortcut = io && io->KeyCtrl && !io->KeyAlt && !io->KeySuper &&
         ImGuiMCP::IsWindowFocused(ImGuiMCP::ImGuiFocusedFlags_RootAndChildWindows) &&
         ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_L, false);
     if (focusFilterShortcut) {
         ImGuiMCP::SetKeyboardFocusHere();
     }
+    if (ImGuiMCP::Shortcut(ImGuiMCP::ImGuiMod_Ctrl | ImGuiMCP::ImGuiKey_D, kFilterShortcutRoute)) {
+        FilterToggleTrailingDistance(filterBuffer, sizeof(filterBuffer));
+    }
     ImGuiMCP::SetNextItemWidth(-1.0f);
     ImGuiMCP::InputTextWithHint("##ActorListFilter", "Filter...", filterBuffer, sizeof(filterBuffer));
     AcceptActorRowDragDropAtTarget(nullptr);
     ImGuiMCP::TextDisabled(
-        "Ctrl+L: focus filter  |  e.g. lydia 1000 or name ct lydia and ag ct child  |  not, ==, contains(ct), startswith(sw), endswith(ew), <, >  |  a or b and c = a or (b and c)  |  \"quotes for spaces\"");
+        "Ctrl+L: focus filter  |  Ctrl+D: distance toggle  |  e.g. lydia 1000 or name ct lydia and ag ct child  |  not, ==, contains(ct), startswith(sw), endswith(ew), <, >  |  a or b and c = a or (b and c)");
     AcceptActorRowDragDropAtTarget(nullptr);
     if (std::strcmp(filterBuffer, lastTokenizedFilter) != 0) {
         strncpy_s(lastTokenizedFilter, filterBuffer, sizeof(lastTokenizedFilter));

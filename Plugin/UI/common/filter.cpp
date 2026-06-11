@@ -1140,3 +1140,50 @@ static bool FilterMatchFloatOp(FilterOp op, float value, double threshold) {
         return false;
     }
 }
+
+bool FilterToggleTrailingDistance(char* buffer, std::size_t bufferSize, int defaultDistance) {
+    if (buffer == nullptr || bufferSize == 0) {
+        return false;
+    }
+
+    FilterTokenizeResult tokenizeResult = {};
+    FilterTokenize(buffer, tokenizeResult);
+
+    if (tokenizeResult.ok && tokenizeResult.count > 0 &&
+        tokenizeResult.tokens[tokenizeResult.count - 1].kind == FilterTokenKind::Number) {
+        const FilterToken& lastToken = tokenizeResult.tokens[tokenizeResult.count - 1];
+        const char* const bufferEnd = buffer + std::strlen(buffer);
+        if (lastToken.lexeme.data() < buffer || lastToken.lexeme.data() + lastToken.lexeme.size() > bufferEnd) {
+            return false;
+        }
+
+        std::size_t removeStart = static_cast<std::size_t>(lastToken.lexeme.data() - buffer);
+        std::size_t removeEnd = removeStart + lastToken.lexeme.size();
+        while (removeStart > 0 && std::isspace(static_cast<unsigned char>(buffer[removeStart - 1]))) {
+            --removeStart;
+        }
+        const std::size_t len = static_cast<std::size_t>(bufferEnd - buffer);
+        while (removeEnd < len && std::isspace(static_cast<unsigned char>(buffer[removeEnd]))) {
+            ++removeEnd;
+        }
+
+        std::memmove(buffer + removeStart, buffer + removeEnd, len - removeEnd + 1);
+        return true;
+    }
+
+    std::size_t len = std::strlen(buffer);
+    while (len > 0 && std::isspace(static_cast<unsigned char>(buffer[len - 1]))) {
+        --len;
+    }
+    buffer[len] = '\0';
+
+    char suffix[32] = {};
+    const int written = len == 0 ? std::snprintf(suffix, sizeof(suffix), "%d", defaultDistance)
+                                 : std::snprintf(suffix, sizeof(suffix), " %d", defaultDistance);
+    if (written < 0 || static_cast<std::size_t>(written) >= bufferSize - len) {
+        return false;
+    }
+
+    std::memcpy(buffer + len, suffix, static_cast<std::size_t>(written) + 1);
+    return true;
+}

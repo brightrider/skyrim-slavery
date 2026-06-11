@@ -1055,16 +1055,21 @@ void __stdcall UI::MarkerListView::Render() {
     }
 
     ImGuiMCP::ImGuiIO* io = ImGuiMCP::GetIO();
+    constexpr ImGuiMCP::ImGuiInputFlags kFilterShortcutRoute =
+        ImGuiMCP::ImGuiInputFlags_RouteFocused | ImGuiMCP::ImGuiInputFlags_RouteOverActive;
     const bool focusFilterShortcut = io && io->KeyCtrl && !io->KeyAlt && !io->KeySuper &&
         ImGuiMCP::IsWindowFocused(ImGuiMCP::ImGuiFocusedFlags_RootAndChildWindows) &&
         ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_L, false);
     if (focusFilterShortcut) {
         ImGuiMCP::SetKeyboardFocusHere();
     }
+    if (ImGuiMCP::Shortcut(ImGuiMCP::ImGuiMod_Ctrl | ImGuiMCP::ImGuiKey_D, kFilterShortcutRoute)) {
+        FilterToggleTrailingDistance(filterBuffer, sizeof(filterBuffer));
+    }
     ImGuiMCP::SetNextItemWidth(-1.0f);
     ImGuiMCP::InputTextWithHint("##MarkerListFilter", "Filter...", filterBuffer, sizeof(filterBuffer));
     ImGuiMCP::TextDisabled(
-        "Ctrl+L: focus filter  |  Ctrl+M: focus marker name  |  e.g. todo");
+        "Ctrl+L: focus filter  |  Ctrl+D: distance toggle  |  Ctrl+M: focus marker name  |  e.g. todo");
     if (std::strcmp(filterBuffer, lastTokenizedFilter) != 0) {
         strncpy_s(lastTokenizedFilter, filterBuffer, sizeof(lastTokenizedFilter));
         lastTokenizedFilter[sizeof(lastTokenizedFilter) - 1] = '\0';

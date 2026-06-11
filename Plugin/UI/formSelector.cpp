@@ -234,11 +234,16 @@ static bool MatchesFilter(const FormSelectorEntry& entry) {
     return true;
 }
 
-void UI::FormSelector::Open() {
+void UI::FormSelector::Open(const char* initialFilter, bool force) {
     g_hasSelectedForm = false;
     g_selectedForm = nullptr;
     g_pendingForm = nullptr;
     g_focusFilterOnOpen = true;
+    if (initialFilter && initialFilter[0] != '\0' && (force || g_filterBuffer[0] == '\0')) {
+        strncpy_s(g_filterBuffer, initialFilter, sizeof(g_filterBuffer) - 1);
+        g_filterBuffer[sizeof(g_filterBuffer) - 1] = '\0';
+        g_lastParsedFilter[0] = '\0';
+    }
     EnsureEntriesBuilt();
     if (Window) {
         Window->IsOpen = true;
@@ -296,7 +301,10 @@ void __stdcall UI::FormSelector::Render() {
     RE::TESForm* singleVisibleForm = nullptr;
     ImGuiMCP::ImVec2 avail{};
     ImGuiMCP::GetContentRegionAvail(&avail);
-    if (ImGuiMCP::BeginChild("##FormSelectorList", ImGuiMCP::ImVec2{0.0f, avail.y}, 0)) {
+    const ImGuiMCP::ImGuiStyle* style = ImGuiMCP::GetStyle();
+    const float footerHeight = ImGuiMCP::GetFrameHeight() + style->ItemSpacing.y;
+    const float listHeight = std::max(0.0f, avail.y - footerHeight);
+    if (ImGuiMCP::BeginChild("##FormSelectorList", ImGuiMCP::ImVec2{0.0f, listHeight}, 0)) {
         for (const FormSelectorEntry& entry : g_entries) {
             if (!MatchesFilter(entry)) {
                 continue;
@@ -317,9 +325,16 @@ void __stdcall UI::FormSelector::Render() {
         ImGuiMCP::EndChild();
     }
 
-    const bool enterPressed = ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Enter, false) ||
-        ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_KeypadEnter, false);
+    const bool okButtonPressed = ImGuiMCP::Button("OK");
+    ImGuiMCP::SameLine();
+    const bool cancelButtonPressed = ImGuiMCP::Button("Cancel");
+
     const bool escPressed = ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Escape, false);
+    const bool enterPressed =
+        ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Enter, false) ||
+        ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_KeypadEnter, false) ||
+        okButtonPressed;
+    const bool cancelPressed = escPressed || cancelShortcut || cancelButtonPressed;
     RE::TESForm* formToAccept = g_pendingForm;
     if (!formToAccept && visibleCount == 1) {
         formToAccept = singleVisibleForm;
@@ -328,7 +343,7 @@ void __stdcall UI::FormSelector::Render() {
         g_selectedForm = formToAccept;
         g_hasSelectedForm = true;
         closeWindow = true;
-    } else if (escPressed || cancelShortcut) {
+    } else if (cancelPressed) {
         g_selectedForm = nullptr;
         g_hasSelectedForm = false;
         closeWindow = true;

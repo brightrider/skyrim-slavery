@@ -23,6 +23,9 @@ LeveledActor Property BRSS_LC_WoodElf_Female Auto
 
 Faction Property CWPlayerAlly Auto
 
+Keyword Property BRSS_PackageKeyword1 Auto
+Keyword Property BRSS_PackageKeyword2 Auto
+
 Message Property BRSS_SelectNpcType Auto
 Message Property BRSS_SelectRace Auto
 Message Property BRSS_SelectWeapon Auto
@@ -72,8 +75,8 @@ BRSSActorScript Function AddActor(String actorType, String name="", String actor
         If weaponIdx == -1
             weaponIdx = Utility.RandomInt(0, 7)
         EndIf
-        newActor.AddItem(GetWeaponByIdx(weaponIdx), abSilent=True)
-        newActor.AddItem(GetWeaponAddonByIdx(weaponIdx), abSilent=True)
+        newActor.EquipItem(GetWeaponByIdx(weaponIdx), abPreventRemoval=True, abSilent=True)
+        newActor.EquipItem(GetWeaponAddonByIdx(weaponIdx), abPreventRemoval=True, abSilent=True)
     ElseIf actorType == "Slave"
         If ! SelectNpcTemplateList(actorRace, isVampire, False)
             ReleaseLock()
@@ -266,6 +269,7 @@ Function ExecutionFire()
         BRSSActorScript npc = actors[i] as BRSSActorScript
         If npc.IsGuard() && (npc.IsUsingIdleMarker() || npc.IsAiming() || npc.IsUsingWeapon() || npc.IsUsingWeaponOnce())
             npc.UseWeapon(None, None)
+            (npc.GetLinkedRef(BRSS_PackageKeyword2) as BRSSActorScript).RemoveFromBRSS()
         EndIf
         i += 1
     EndWhile
@@ -278,6 +282,7 @@ Function ExecutionFireOnce()
         BRSSActorScript npc = actors[i] as BRSSActorScript
         If npc.IsGuard() && (npc.IsUsingIdleMarker() || npc.IsAiming() || npc.IsUsingWeapon() || npc.IsUsingWeaponOnce())
             npc.UseWeaponOnce(None, None)
+            (npc.GetLinkedRef(BRSS_PackageKeyword2) as BRSSActorScript).RemoveFromBRSS()
         EndIf
         i += 1
     EndWhile

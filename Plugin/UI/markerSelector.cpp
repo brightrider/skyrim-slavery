@@ -1,5 +1,6 @@
 #include "markerSelector.h"
 
+#include <algorithm>
 #include <cstring>
 #include <unordered_set>
 #include <vector>
@@ -58,7 +59,7 @@ static constexpr FilterSchema kMarkerSelectorFilterSchema{
     kMarkerSelectorFilterShorthand,
 };
 
-static std::unordered_set<RE::TESObjectREFR*> g_pendingSelection;
+static std::vector<RE::TESObjectREFR*> g_pendingSelection;
 static std::vector<RE::TESObjectREFR*> g_confirmedMarkers;
 static bool g_hasConfirmedSelection = false;
 static char g_filterBuffer[256] = {};
@@ -68,6 +69,7 @@ static FilterParseResult g_parseResult = {};
 static bool g_focusFilterOnOpen = false;
 static bool g_closeOnDoubleClick = false;
 static RE::TESObjectREFR* g_navFocusedMarker = nullptr;
+static RE::TESObjectREFR* g_selectionAnchor = nullptr;
 
 struct MarkerSelectorCachedEntry {
     RE::TESObjectREFR* marker = nullptr;
@@ -205,28 +207,86 @@ static void CollectVisibleMarkers(std::vector<RE::TESObjectREFR*>& outMarkers, b
     }
 }
 
-static void UpdateSelectionOnRowClick(RE::TESObjectREFR* marker) {
-    const bool wasSelected = g_pendingSelection.contains(marker);
+static bool PendingSelectionContains(RE::TESObjectREFR* marker) {
+    return std::find(g_pendingSelection.begin(), g_pendingSelection.end(), marker) !=
+        g_pendingSelection.end();
+}
+
+static void PendingSelectionRemove(RE::TESObjectREFR* marker) {
+    const auto it = std::find(g_pendingSelection.begin(), g_pendingSelection.end(), marker);
+    if (it != g_pendingSelection.end()) {
+        g_pendingSelection.erase(it);
+    }
+}
+
+static std::size_t FindVisibleMarkerIndex(RE::TESObjectREFR* marker, bool applyFilter) {
+    std::size_t rowIndex = 0;
+    for (const MarkerSelectorCachedEntry& entry : g_cachedMarkers) {
+        if (!applyFilter || CachedEntryMatchesFilter(entry, g_parseResult)) {
+            if (entry.marker == marker) {
+                return rowIndex;
+            }
+            ++rowIndex;
+        }
+    }
+    return static_cast<std::size_t>(-1);
+}
+
+static void SelectVisibleMarkerRange(
+    std::size_t fromIndex, std::size_t toIndex, bool addToSelection, bool applyFilter) {
+    const std::size_t begin = std::min(fromIndex, toIndex);
+    const std::size_t end = std::max(fromIndex, toIndex);
+    if (!addToSelection) {
+        g_pendingSelection.clear();
+    }
+    std::size_t rowIndex = 0;
+    for (const MarkerSelectorCachedEntry& entry : g_cachedMarkers) {
+        if (!applyFilter || CachedEntryMatchesFilter(entry, g_parseResult)) {
+            if (rowIndex >= begin && rowIndex <= end) {
+                if (!PendingSelectionContains(entry.marker)) {
+                    g_pendingSelection.push_back(entry.marker);
+                }
+            }
+            ++rowIndex;
+        }
+    }
+}
+
+static void UpdateSelectionOnRowClick(RE::TESObjectREFR* marker, std::size_t rowIndex, bool applyFilter) {
+    const bool wasSelected = PendingSelectionContains(marker);
     ImGuiMCP::ImGuiIO* io = ImGuiMCP::GetIO();
     const bool ctrlHeld = io && (io->KeyCtrl || io->KeySuper);
+    const bool shiftHeld = io && io->KeyShift;
+
+    if (shiftHeld) {
+        std::size_t anchorIndex = rowIndex;
+        if (g_selectionAnchor) {
+            const std::size_t foundIndex = FindVisibleMarkerIndex(g_selectionAnchor, applyFilter);
+            if (foundIndex != static_cast<std::size_t>(-1)) {
+                anchorIndex = foundIndex;
+            }
+        }
+        SelectVisibleMarkerRange(anchorIndex, rowIndex, ctrlHeld, applyFilter);
+        return;
+    }
 
     if (ctrlHeld) {
         if (wasSelected) {
-            g_pendingSelection.erase(marker);
+            PendingSelectionRemove(marker);
         } else {
-            g_pendingSelection.insert(marker);
+            g_pendingSelection.push_back(marker);
         }
         return;
     }
 
     g_pendingSelection.clear();
-    if (!wasSelected) {
-        g_pendingSelection.insert(marker);
-    }
+    g_pendingSelection.push_back(marker);
+    g_selectionAnchor = marker;
 }
 
-static void RenderMarkerSelectorTableRow(const MarkerTableRow& row, RE::TESObjectREFR* marker) {
-    const bool selected = g_pendingSelection.contains(marker);
+static void RenderMarkerSelectorTableRow(
+    const MarkerTableRow& row, RE::TESObjectREFR* marker, std::size_t rowIndex, bool applyFilter) {
+    const bool selected = PendingSelectionContains(marker);
 
     ImGuiMCP::TableNextRow();
     ImGuiMCP::PushID(static_cast<int>(marker->GetFormID()));
@@ -259,7 +319,7 @@ static void RenderMarkerSelectorTableRow(const MarkerTableRow& row, RE::TESObjec
             const bool enterActivatingRow = ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Enter, false) ||
                 ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_KeypadEnter, false);
             if (!enterActivatingRow) {
-                UpdateSelectionOnRowClick(marker);
+                UpdateSelectionOnRowClick(marker, rowIndex, applyFilter);
             }
         }
     }
@@ -270,11 +330,17 @@ static void RenderMarkerSelectorTableRow(const MarkerTableRow& row, RE::TESObjec
     ImGuiMCP::PopID();
 }
 
-void UI::MarkerSelector::Open() {
+void UI::MarkerSelector::Open(const char* initialFilter, bool force) {
     g_hasConfirmedSelection = false;
     g_confirmedMarkers.clear();
     g_pendingSelection.clear();
+    g_selectionAnchor = nullptr;
     g_focusFilterOnOpen = true;
+    if (initialFilter && initialFilter[0] != '\0' && (force || g_filterBuffer[0] == '\0')) {
+        strncpy_s(g_filterBuffer, initialFilter, sizeof(g_filterBuffer) - 1);
+        g_filterBuffer[sizeof(g_filterBuffer) - 1] = '\0';
+        g_lastTokenizedFilter[0] = '\0';
+    }
     if (g_lastReferenceSearchRadius < 0.0f) {
         g_lastReferenceSearchRadius = kDefaultReferenceSearchRadius;
     }
@@ -311,26 +377,40 @@ void __stdcall UI::MarkerSelector::Render() {
 
     g_closeOnDoubleClick = false;
 
+    ImGuiMCP::ImGuiIO* io = ImGuiMCP::GetIO();
+    const bool cancelShortcut = io && io->KeyCtrl && !io->KeyAlt && !io->KeySuper &&
+        ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Q, false);
+    const bool escPressed = ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Escape, false);
+
     if (g_cachedMarkers.empty()) {
         ImGuiMCP::Text("No markers found");
+        if (ImGuiMCP::Button("Cancel") || escPressed || cancelShortcut) {
+            g_hasConfirmedSelection = false;
+            g_confirmedMarkers.clear();
+            if (Window) {
+                Window->IsOpen = false;
+            }
+            g_cachedMarkers.clear();
+        }
         ImGuiMCP::End();
         return;
     }
 
-    const bool focusFilterShortcut = ImGuiMCP::Shortcut(
-        ImGuiMCP::ImGuiMod_Ctrl | ImGuiMCP::ImGuiKey_L,
-        ImGuiMCP::ImGuiInputFlags_RouteFocused | ImGuiMCP::ImGuiInputFlags_RouteOverActive);
-    ImGuiMCP::ImGuiIO* io = ImGuiMCP::GetIO();
-    const bool cancelShortcut = io && io->KeyCtrl && !io->KeyAlt && !io->KeySuper &&
-        ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Q, false);
+    constexpr ImGuiMCP::ImGuiInputFlags kFilterShortcutRoute =
+        ImGuiMCP::ImGuiInputFlags_RouteFocused | ImGuiMCP::ImGuiInputFlags_RouteOverActive;
+    const bool focusFilterShortcut =
+        ImGuiMCP::Shortcut(ImGuiMCP::ImGuiMod_Ctrl | ImGuiMCP::ImGuiKey_L, kFilterShortcutRoute);
 
     if (g_focusFilterOnOpen || focusFilterShortcut) {
         ImGuiMCP::SetKeyboardFocusHere();
         g_focusFilterOnOpen = false;
     }
+    if (ImGuiMCP::Shortcut(ImGuiMCP::ImGuiMod_Ctrl | ImGuiMCP::ImGuiKey_D, kFilterShortcutRoute)) {
+        FilterToggleTrailingDistance(g_filterBuffer, sizeof(g_filterBuffer));
+    }
     ImGuiMCP::SetNextItemWidth(-1.0f);
     ImGuiMCP::InputTextWithHint("##MarkerSelectorFilter", "Filter...", g_filterBuffer, sizeof(g_filterBuffer));
-    ImGuiMCP::TextDisabled("Ctrl+L: focus filter | Ctrl+Enter: select all visible | Ctrl+Q: cancel");
+    ImGuiMCP::TextDisabled("Ctrl+L: focus filter | Ctrl+D: distance toggle | Ctrl+Enter: select all visible | Ctrl+Q: cancel");
     if (std::strcmp(g_filterBuffer, g_lastTokenizedFilter) != 0) {
         strncpy_s(g_lastTokenizedFilter, g_filterBuffer, sizeof(g_lastTokenizedFilter));
         g_lastTokenizedFilter[sizeof(g_lastTokenizedFilter) - 1] = '\0';
@@ -357,12 +437,15 @@ void __stdcall UI::MarkerSelector::Render() {
 
     ImGuiMCP::ImVec2 tableAvail{};
     ImGuiMCP::GetContentRegionAvail(&tableAvail);
+    const ImGuiMCP::ImGuiStyle* style = ImGuiMCP::GetStyle();
+    const float footerHeight = ImGuiMCP::GetFrameHeight() + style->ItemSpacing.y;
+    const float tableHeight = std::max(0.0f, tableAvail.y - footerHeight);
 
     bool closeWindow = false;
     std::size_t visibleRowCount = 0;
     RE::TESObjectREFR* singleVisibleMarker = nullptr;
 
-    if (ImGuiMCP::BeginChild("##MarkerSelectorTable", ImGuiMCP::ImVec2{0.0f, tableAvail.y}, 0)) {
+    if (ImGuiMCP::BeginChild("##MarkerSelectorTable", ImGuiMCP::ImVec2{0.0f, tableHeight}, 0)) {
         constexpr ImGuiMCP::ImGuiTableFlags tableFlags = ImGuiMCP::ImGuiTableFlags_Resizable |
                                                          ImGuiMCP::ImGuiTableFlags_RowBg |
                                                          ImGuiMCP::ImGuiTableFlags_SizingFixedFit |
@@ -378,11 +461,13 @@ void __stdcall UI::MarkerSelector::Render() {
             ImGuiMCP::TableHeadersRow();
 
             g_navFocusedMarker = nullptr;
+            std::size_t rowIndex = 0;
             for (const MarkerSelectorCachedEntry& entry : g_cachedMarkers) {
                 if (!applyFilter || CachedEntryMatchesFilter(entry, g_parseResult)) {
                     ++visibleRowCount;
                     singleVisibleMarker = entry.marker;
-                    RenderMarkerSelectorTableRow(entry.row, entry.marker);
+                    RenderMarkerSelectorTableRow(entry.row, entry.marker, rowIndex, applyFilter);
+                    ++rowIndex;
                 }
             }
 
@@ -391,14 +476,21 @@ void __stdcall UI::MarkerSelector::Render() {
         ImGuiMCP::EndChild();
     }
 
+    const bool okButtonPressed = ImGuiMCP::Button("OK");
+    ImGuiMCP::SameLine();
+    const bool cancelButtonPressed = ImGuiMCP::Button("Cancel");
+
     constexpr ImGuiMCP::ImGuiInputFlags kConfirmInputRoute = ImGuiMCP::ImGuiInputFlags_RouteGlobal;
+    const bool ctrlHeld = io && io->KeyCtrl && !io->KeyAlt && !io->KeySuper;
     const bool confirmAllVisiblePressed =
         ImGuiMCP::Shortcut(ImGuiMCP::ImGuiMod_Ctrl | ImGuiMCP::ImGuiKey_Enter, kConfirmInputRoute) ||
-        ImGuiMCP::Shortcut(ImGuiMCP::ImGuiMod_Ctrl | ImGuiMCP::ImGuiKey_KeypadEnter, kConfirmInputRoute);
-    const bool confirmPressed = !confirmAllVisiblePressed && !(io && io->KeyCtrl) &&
+        ImGuiMCP::Shortcut(ImGuiMCP::ImGuiMod_Ctrl | ImGuiMCP::ImGuiKey_KeypadEnter, kConfirmInputRoute) ||
+        (okButtonPressed && ctrlHeld);
+    const bool confirmPressed = !confirmAllVisiblePressed && !ctrlHeld &&
         (ImGuiMCP::Shortcut(ImGuiMCP::ImGuiKey_Enter, kConfirmInputRoute) ||
-            ImGuiMCP::Shortcut(ImGuiMCP::ImGuiKey_KeypadEnter, kConfirmInputRoute));
-    const bool escPressed = ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Escape, false);
+            ImGuiMCP::Shortcut(ImGuiMCP::ImGuiKey_KeypadEnter, kConfirmInputRoute) ||
+            okButtonPressed);
+    const bool cancelPressed = escPressed || cancelShortcut || cancelButtonPressed;
 
     if (confirmAllVisiblePressed && MarkerSelectorFilterIsNonEmpty()) {
         CollectVisibleMarkers(g_confirmedMarkers, applyFilter);
@@ -418,7 +510,7 @@ void __stdcall UI::MarkerSelector::Render() {
         }
         g_hasConfirmedSelection = true;
         closeWindow = true;
-    } else if (escPressed || cancelShortcut) {
+    } else if (cancelPressed) {
         g_hasConfirmedSelection = false;
         g_confirmedMarkers.clear();
         closeWindow = true;

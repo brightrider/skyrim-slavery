@@ -39,7 +39,7 @@ Event OnInit()
     IgnoreFriendlyHits()
 
     If IsSlave()
-        ForceAV("Health", 1000000000.0)
+        SetAV("Health", 1000000.0)
     EndIf
 EndEvent
 

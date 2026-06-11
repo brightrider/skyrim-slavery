@@ -152,3 +152,4 @@ bool FilterMatchesShorthandTextWords(const FilterShorthandGroup& group, const vo
 bool FilterMatchesShorthandLessBound(const FilterShorthandGroup& group, const void* rowContext, const FilterSchema& schema,
     const FilterRowAccess& access);
 float FilterGetLessUpperBound(const FilterParseResult& parseResult, std::uint8_t numberFieldId, float defaultValue);
+bool FilterToggleTrailingDistance(char* buffer, std::size_t bufferSize, int defaultDistance = 1024);
