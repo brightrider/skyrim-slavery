@@ -307,6 +307,11 @@ namespace Utility {
                 buf.append(nameP1);
                 break;
 
+            case 11:
+                buf.append("Attacking ");
+                buf.append(nameP1);
+                break;
+
             default:
                 buf.append("No action assigned");
                 break;

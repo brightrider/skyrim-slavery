@@ -39,7 +39,7 @@ Event OnInit()
     IgnoreFriendlyHits()
 
     If IsSlave()
-        SetAV("Health", 1000000.0)
+        SetAV("Health", 10000000000000000000000000.0)
     EndIf
 EndEvent
 
@@ -115,6 +115,8 @@ EndFunction
 Function Wait(Bool bypassLock=False)
     AcquireLock(bypassLock)
 
+    ProcedureCleanup()
+
     SetLinkedRef(BRSS_PackageKeyword1, None)
     SetLinkedRef(BRSS_PackageKeyword2, None)
     SetAV("Variable08", 0)
@@ -125,6 +127,8 @@ EndFunction
 
 Function Travel(ObjectReference target, Bool bypassLock=False)
     AcquireLock(bypassLock)
+
+    ProcedureCleanup()
 
     SetLinkedRef(BRSS_PackageKeyword1, target)
     SetLinkedRef(BRSS_PackageKeyword2, None)
@@ -137,6 +141,8 @@ EndFunction
 Function Follow(ObjectReference target, Bool bypassLock=False)
     AcquireLock(bypassLock)
 
+    ProcedureCleanup()
+
     SetLinkedRef(BRSS_PackageKeyword1, target)
     SetLinkedRef(BRSS_PackageKeyword2, None)
     SetAV("Variable08", 2)
@@ -147,6 +153,8 @@ EndFunction
 
 Function UseIdleMarker(ObjectReference target, ObjectReference secondTarget=None, Bool bypassLock=False)
     AcquireLock(bypassLock)
+
+    ProcedureCleanup()
 
     If target
         SetLinkedRef(BRSS_PackageKeyword1, target)
@@ -165,6 +173,8 @@ EndFunction
 
 Function UseWeapon(ObjectReference target, ObjectReference loc, Bool bypassLock=False)
     AcquireLock(bypassLock)
+
+    ProcedureCleanup()
 
     If loc
         SetLinkedRef(BRSS_PackageKeyword1, loc)
@@ -200,6 +210,8 @@ EndFunction
 Function Patrol(ObjectReference p1, ObjectReference p2, Bool bypassLock=False)
     AcquireLock(bypassLock)
 
+    ProcedureCleanup()
+
     SetLinkedRef(BRSS_PackageKeyword1, p1)
     SetLinkedRef(BRSS_PackageKeyword2, p2)
     SetAV("Variable08", 6)
@@ -210,6 +222,8 @@ EndFunction
 
 Function Aim(ObjectReference target, ObjectReference loc, Bool periodicAttack=False, Bool bypassLock=False)
     AcquireLock(bypassLock)
+
+    ProcedureCleanup()
 
     If loc
         SetLinkedRef(BRSS_PackageKeyword1, loc)
@@ -235,6 +249,8 @@ EndFunction
 Function Sit(ObjectReference target, Bool bypassLock=False)
     AcquireLock(bypassLock)
 
+    ProcedureCleanup()
+
     SetLinkedRef(BRSS_PackageKeyword1, target)
     SetLinkedRef(BRSS_PackageKeyword2, None)
     SetAV("Variable08", 8)
@@ -248,6 +264,8 @@ EndFunction
 
 Function UseWeaponOnce(ObjectReference target, ObjectReference loc, Bool bypassLock=False)
     AcquireLock(bypassLock)
+
+    ProcedureCleanup()
 
     If loc
         SetLinkedRef(BRSS_PackageKeyword1, loc)
@@ -263,6 +281,8 @@ EndFunction
 
 Function UseIdleMarkerWeaponDrawn(ObjectReference target, ObjectReference secondTarget=None, Bool bypassLock=False)
     AcquireLock(bypassLock)
+
+    ProcedureCleanup()
 
     If target
         SetLinkedRef(BRSS_PackageKeyword1, target)
@@ -281,6 +301,8 @@ EndFunction
 
 Function Use(ObjectReference target, ObjectReference secondTarget=None, String miningRes="", Bool bypassLock=False)
     AcquireLock(bypassLock)
+
+    ProcedureCleanup()
 
     If miningRes == "clay"
         MiningResource = BYOHMaterialClay
@@ -326,6 +348,19 @@ Function Use(ObjectReference target, ObjectReference secondTarget=None, String m
     ReleaseLock(bypassLock)
 EndFunction
 
+Function Attack(Actor target, Bool bypassLock=False)
+    AcquireLock(bypassLock)
+
+    ProcedureCleanup()
+
+    SetLinkedRef(BRSS_PackageKeyword1, target)
+    SetAV("Variable08", 11)
+    target.SetDontMove()
+    StartCombat(target)
+
+    ReleaseLock(bypassLock)
+EndFunction
+
 Bool Function IsWaiting()
     Return GetAV("Variable08") as Int == 0
 EndFunction
@@ -366,6 +401,10 @@ Bool Function IsUsingIdleMarkerWeaponDrawn()
     Return GetAV("Variable08") as Int == 10
 EndFunction
 
+Bool Function IsAttacking()
+    Return GetAV("Variable08") as Int == 11
+EndFunction
+
 Function SetActorName(String value)
     If ! value
         Return
@@ -394,6 +433,15 @@ Function SetLinkedRef(Keyword kwd, ObjectReference target)
         LinkedRefs[1] = target
     EndIf
     PO3_SKSEFunctions.SetLinkedRef(Self, target, kwd)
+EndFunction
+
+Function ProcedureCleanup()
+    If IsAttacking()
+        Actor target = GetLinkedRef(BRSS_PackageKeyword1) as Actor
+        StopCombat()
+        target.StopCombat()
+        target.SetDontMove(False)
+    EndIf
 EndFunction
 
 Function AcquireLock(Bool bypass=False, Float spinDelay=0.001)

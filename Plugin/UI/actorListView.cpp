@@ -18,6 +18,7 @@
 #include "../PAPI.h"
 #include "../utility.h"
 
+#include "actorSelector.h"
 #include "markerSelector.h"
 
 enum class ActorFilterField : std::uint8_t {
@@ -90,9 +91,12 @@ static const FilterRowAccess kActorFilterRowAccess{
 
 static constexpr const char* kActorRowDragDropPayloadType = "SS_ActorRow";
 
+static constexpr int kActionButtonCount = 9;
+
 static RE::Actor* g_pendingTravelActor = nullptr;
 static RE::Actor* g_pendingUseActor = nullptr;
 static RE::Actor* g_pendingPatrolActor = nullptr;
+static RE::Actor* g_pendingAttackActor = nullptr;
 static std::string_view g_actorListFilterResourceView;
 
 static bool g_collectResourcePopupRequested = false;
@@ -101,6 +105,33 @@ static RE::TESBoundObject* g_collectResourceObject = nullptr;
 static std::int32_t g_collectResourceMax = 0;
 static int g_collectResourceAmount = 0;
 static char g_collectResourcePopupLabel[160] = {};
+
+struct OutfitPreset {
+    const char* name;
+    std::uint32_t formId;
+};
+
+static constexpr const char* kOutfitPlugin = "SkyrimSlaveryOutfits.esp";
+
+static constexpr OutfitPreset kOutfitPresets[] = {
+    { "Naked", 0xAA00 },
+    { "Naked (HBH)", 0xAA01 },
+    { "Cuffs", 0xFB07 },
+    { "CrossPole", 0xFB06 },
+    { "Chastity", 0xFB04 },
+    { "Chastity (HBH)", 0xFB05 },
+    { "Pee", 0xFB02 },
+    { "Pee (HBH)", 0xFB03 },
+};
+
+static constexpr std::size_t kMaxOutfitVisibleActors = 1024;
+
+static bool g_outfitPopupRequested = false;
+static bool g_outfitApplyToAllVisible = false;
+static bool g_outfitDeferPopupUntilVisibleCollected = false;
+static RE::Actor* g_outfitActor = nullptr;
+static RE::Actor* g_outfitAppliedActors[kMaxOutfitVisibleActors];
+static std::size_t g_outfitAppliedActorCount = 0;
 
 static void FormatActorResourceText(RE::Actor* actor, std::string& buf) {
     const auto [resource, count] = Utility::GetCurrentResource(actor);
@@ -188,6 +219,82 @@ static void RenderCollectResourcePopup() {
         g_collectResourceActor = nullptr;
         g_collectResourceObject = nullptr;
         g_collectResourceMax = 0;
+        ImGuiMCP::CloseCurrentPopup();
+    }
+
+    ImGuiMCP::EndPopup();
+}
+
+static void ApplyOutfitToActor(RE::Actor* actor, RE::BGSOutfit* outfit) {
+    if (!actor || !outfit) {
+        return;
+    }
+    Papyrus::Call(
+        actor,
+        "BRSSActorScript",
+        "SetOutfit",
+        [](RE::BSScript::Variable) {},
+        static_cast<RE::BGSOutfit*>(outfit),
+        false
+    );
+}
+
+static void RequestOutfitPopup(RE::Actor* actor, bool applyToAllVisible) {
+    g_outfitApplyToAllVisible = applyToAllVisible;
+    if (applyToAllVisible) {
+        g_outfitActor = nullptr;
+        g_outfitDeferPopupUntilVisibleCollected = true;
+    } else {
+        g_outfitActor = actor;
+        g_outfitPopupRequested = true;
+    }
+}
+
+static void RenderOutfitPopup() {
+    if (g_outfitPopupRequested) {
+        ImGuiMCP::OpenPopup("Select outfit");
+        g_outfitPopupRequested = false;
+    }
+
+    constexpr ImGuiMCP::ImGuiWindowFlags popupFlags = ImGuiMCP::ImGuiWindowFlags_AlwaysAutoResize;
+    if (!ImGuiMCP::BeginPopupModal("Select outfit", nullptr, popupFlags)) {
+        return;
+    }
+
+    RE::TESDataHandler* dh = RE::TESDataHandler::GetSingleton();
+    RE::Actor* actor = g_outfitActor;
+    bool closePopup = false;
+
+    for (const OutfitPreset& preset : kOutfitPresets) {
+        if (ImGuiMCP::Selectable(preset.name, false)) {
+            if (dh) {
+                RE::BGSOutfit* outfit = dh->LookupForm<RE::BGSOutfit>(preset.formId, kOutfitPlugin);
+                if (outfit) {
+                    if (g_outfitApplyToAllVisible) {
+                        for (std::size_t i = 0; i < g_outfitAppliedActorCount; ++i) {
+                            ApplyOutfitToActor(g_outfitAppliedActors[i], outfit);
+                        }
+                    } else {
+                        ApplyOutfitToActor(actor, outfit);
+                    }
+                }
+            }
+            closePopup = true;
+            break;
+        }
+    }
+
+    ImGuiMCP::ImGuiIO* io = ImGuiMCP::GetIO();
+    const bool cancelShortcut = io && io->KeyCtrl && !io->KeyAlt && !io->KeySuper &&
+        ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Q, false);
+    if (cancelShortcut || ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Escape, false)) {
+        closePopup = true;
+    }
+
+    if (closePopup) {
+        g_outfitActor = nullptr;
+        g_outfitApplyToAllVisible = false;
+        g_outfitAppliedActorCount = 0;
         ImGuiMCP::CloseCurrentPopup();
     }
 
@@ -454,6 +561,7 @@ static void RenderActorTableRow(
         g_pendingTravelActor = actor;
         g_pendingUseActor = nullptr;
         g_pendingPatrolActor = nullptr;
+        g_pendingAttackActor = nullptr;
         UI::MarkerSelector::Open();
     }
     ImGuiMCP::SetItemTooltip("Travel");
@@ -474,6 +582,7 @@ static void RenderActorTableRow(
         g_pendingUseActor = actor;
         g_pendingTravelActor = nullptr;
         g_pendingPatrolActor = nullptr;
+        g_pendingAttackActor = nullptr;
         UI::MarkerSelector::Open("1024");
     }
     ImGuiMCP::SetItemTooltip("Use");
@@ -482,9 +591,26 @@ static void RenderActorTableRow(
         g_pendingPatrolActor = actor;
         g_pendingTravelActor = nullptr;
         g_pendingUseActor = nullptr;
+        g_pendingAttackActor = nullptr;
         UI::MarkerSelector::Open("1024");
     }
     ImGuiMCP::SetItemTooltip("Patrol");
+    ImGuiMCP::SameLine();
+    if (ImGuiMCP::Button("A", actionButtonSizeVec)) {
+        g_pendingAttackActor = actor;
+        g_pendingTravelActor = nullptr;
+        g_pendingUseActor = nullptr;
+        g_pendingPatrolActor = nullptr;
+        UI::ActorSelector::Open("slave 1024", true);
+    }
+    ImGuiMCP::SetItemTooltip("Attack");
+    ImGuiMCP::SameLine();
+    if (ImGuiMCP::Button("O", actionButtonSizeVec)) {
+        ImGuiMCP::ImGuiIO* clickIo = ImGuiMCP::GetIO();
+        const bool ctrlHeld = clickIo && (clickIo->KeyCtrl || clickIo->KeySuper);
+        RequestOutfitPopup(actor, ctrlHeld);
+    }
+    ImGuiMCP::SetItemTooltip("Outfit  |  Ctrl+click: all visible");
     ImGuiMCP::SameLine();
     if (ImGuiMCP::Button("C", actionButtonSizeVec)) {
         RequestCollectResourcePopup(actor);
@@ -492,6 +618,7 @@ static void RenderActorTableRow(
     ImGuiMCP::SetItemTooltip("Collect resources");
     ImGuiMCP::SameLine();
     if (ImGuiMCP::Button("X", actionButtonSizeVec)) {
+        Utility::SetHealth(actor, 1.0f);
         Papyrus::Call(
             actor,
             "BRSSActorScript",
@@ -513,6 +640,46 @@ static void RenderActorTableRow(
     }
     AcceptActorRowDragDropAtTarget(actor);
     ImGuiMCP::PopID();
+}
+
+static void CollectOutfitVisibleFollowSubtree(
+    RE::Actor* actor,
+    const FollowChildrenMap& followChildrenByParent,
+    std::size_t& count) {
+    if (count < kMaxOutfitVisibleActors) {
+        g_outfitAppliedActors[count++] = actor;
+    }
+    const auto childrenIt = followChildrenByParent.find(actor);
+    if (childrenIt == followChildrenByParent.end()) {
+        return;
+    }
+    for (RE::Actor* child : childrenIt->second) {
+        CollectOutfitVisibleFollowSubtree(child, followChildrenByParent, count);
+    }
+}
+
+static void CollectOutfitVisibleActors(
+    JC::ObjectId actorDb,
+    const FollowChildrenMap& followChildrenByParent,
+    const FollowChildSet& followChildSet,
+    bool applyFilter,
+    const FilterParseResult& parseResult,
+    bool fillExpensiveFields,
+    std::string& taskBuffer,
+    std::string& resourceBuffer,
+    ActorTableRow& row) {
+    g_outfitAppliedActorCount = 0;
+    RE::TESForm* currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, nullptr, nullptr);
+    while (currentForm) {
+        RE::Actor* currentActor = currentForm->As<RE::Actor>();
+        if (currentActor && followChildSet.find(currentActor) == followChildSet.end()) {
+            if (!applyFilter ||
+                FollowSubtreeMatchesFilter(currentActor, followChildrenByParent, parseResult, fillExpensiveFields, taskBuffer, resourceBuffer, row)) {
+                CollectOutfitVisibleFollowSubtree(currentActor, followChildrenByParent, g_outfitAppliedActorCount);
+            }
+        }
+        currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, currentForm, nullptr);
+    }
 }
 
 static void RenderFollowSubtree(
@@ -649,10 +816,11 @@ void __stdcall UI::ActorListView::Render() {
                                                          ImGuiMCP::ImGuiTableFlags_SizingFixedFit |
                                                          ImGuiMCP::ImGuiTableFlags_ScrollY;
         const float actionButtonSize = ImGuiMCP::GetFrameHeight();
-        const float actionsColumnWidth = actionButtonSize * 7.0f + ImGuiMCP::GetStyle()->ItemSpacing.x * 6.0f +
+        const float actionsColumnWidth = actionButtonSize * static_cast<float>(kActionButtonCount) +
+                                         ImGuiMCP::GetStyle()->ItemSpacing.x * static_cast<float>(kActionButtonCount - 1) +
                                          ImGuiMCP::GetStyle()->CellPadding.x * 2.0f;
         if (ImGuiMCP::BeginTable("ActorListTable", 11, tableFlags)) {
-            ImGuiMCP::TableSetupColumn("Name", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 300.0f);
+            ImGuiMCP::TableSetupColumn("Name", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 200.0f);
             ImGuiMCP::TableSetupColumn("ID");
             ImGuiMCP::TableSetupColumn("Type");
             ImGuiMCP::TableSetupColumn("Weapon");
@@ -684,6 +852,21 @@ void __stdcall UI::ActorListView::Render() {
                 currentForm = JC::jFormMapNextKey(JC::Domain, actorDb, currentForm, nullptr);
             }
 
+            if (g_outfitDeferPopupUntilVisibleCollected) {
+                CollectOutfitVisibleActors(
+                    actorDb,
+                    followChildrenByParent,
+                    followChildSet,
+                    applyFilter,
+                    parseResult,
+                    fillExpensiveFields,
+                    taskBuffer,
+                    resourceBuffer,
+                    row);
+                g_outfitDeferPopupUntilVisibleCollected = false;
+                g_outfitPopupRequested = true;
+            }
+
             ImGuiMCP::EndTable();
         }
         AcceptActorRowDragDropAtTarget(nullptr);
@@ -691,6 +874,7 @@ void __stdcall UI::ActorListView::Render() {
     }
 
     RenderCollectResourcePopup();
+    RenderOutfitPopup();
 
     if (MarkerSelector::Window && !MarkerSelector::Window->IsOpen &&
         (g_pendingTravelActor || g_pendingUseActor || g_pendingPatrolActor)) {
@@ -738,6 +922,23 @@ void __stdcall UI::ActorListView::Render() {
                     false
                 );
             }
+        }
+    }
+
+    if (g_pendingAttackActor && ActorSelector::Window && !ActorSelector::Window->IsOpen) {
+        RE::Actor* pendingActor = g_pendingAttackActor;
+        g_pendingAttackActor = nullptr;
+
+        std::vector<RE::Actor*> selectedActors;
+        if (ActorSelector::ConsumeSelectedActors(selectedActors) && !selectedActors.empty()) {
+            Papyrus::Call(
+                pendingActor,
+                "BRSSActorScript",
+                "Attack",
+                [](RE::BSScript::Variable) {},
+                static_cast<RE::Actor*>(selectedActors[0]),
+                false
+            );
         }
     }
 }
